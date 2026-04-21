@@ -1,0 +1,164 @@
+x-common-environment:
+  # KRaft settings
+  &kafka_broker_common_env_vars
+  KAFKA_PROCESS_ROLES: "broker,controller"
+  KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+  # Common Kafka settings
+  KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,LISTENER_DOCKER_INTERNAL:PLAINTEXT,LISTENER_DOCKER_EXTERNAL:PLAINTEXT
+  KAFKA_INTER_BROKER_LISTENER_NAME: LISTENER_DOCKER_INTERNAL
+  KAFKA_CONFLUENT_SUPPORT_METRICS_ENABLE: "false"
+  KAFKA_LOG4J_ROOT_LOGLEVEL: INFO
+  KAFKA_NUM_PARTITIONS: "1"
+  KAFKA_DEFAULT_REPLICATION_FACTOR: "1"
+  KAFKA_LOG_CLEANUP_POLICY: "delete"
+  KAFKA_LOG_RETENTION_BYTES: "524288000" # 500 MB
+  KAFKA_LOG_SEGMENT_BYTES: "67108864" # 64 MB segments
+  KAFKA_LOG_RETENTION_MS: "86400000" # 1 day
+  # Brokers allow internal topics to exist on a single node
+  KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+  KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+  KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+  KAFKA_MIN_INSYNC_REPLICAS: 1
+  # KIP-932 Share Groups configuration
+  # Enables the Share Group protocol alongside legacy and new consumer protocols
+  KAFKA_GROUP_COORDINATOR_REBALANCE_PROTOCOLS: "classic,consumer,share"
+  # Activates the Share Coordinator module on the brokers
+  KAFKA_SHARE_COORDINATOR_ENABLE: "true"
+  KAFKA_GROUP_SHARE_ENABLE: "true"
+  # Required to use preview/early-access APIs in the Kafka 4.0/4.1 lifecycle
+  KAFKA_UNSTABLE_API_VERSIONS_ENABLE: "true"
+
+services:
+  kpow:
+    image: factorhouse/kpow:latest
+    container_name: kpow
+    pull_policy: always
+    restart: always
+    ports:
+      - "3000:3000" # Kpow UI
+      - "3001:3001" # Kpow API
+    networks:
+      - factorhouse
+    depends_on:
+      connect:
+        condition: service_healthy
+    # environment:
+    #   WEBHOOK_PROVIDER: ${WEBHOOK_PROVIDER:-generic}
+    #   WEBHOOK_URL: ${WEBHOOK_URL:-http://wh-server:9000}
+    env_file:
+      - ./resources/kpow/config/setup.env
+      - ${KPOW_LICENSE:-kpow/config/license.env}
+    mem_limit: 2G
+    volumes:
+      - ./resources/kpow/jaas:/etc/kpow/jaas
+      - ./resources/kpow/rbac:/etc/kpow/rbac
+
+  kafka-1:
+    image: confluentinc/cp-kafka:8.1.1
+    container_name: kafka-1
+    ports:
+      - "9092:9092"
+    networks:
+      - factorhouse
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_LISTENERS: CONTROLLER://kafka-1:19091,LISTENER_DOCKER_INTERNAL://kafka-1:19092,LISTENER_DOCKER_EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: LISTENER_DOCKER_INTERNAL://kafka-1:19092,LISTENER_DOCKER_EXTERNAL://${DOCKER_HOST_IP:-127.0.0.1}:9092
+      # Isolated quorum and unique cluster ID for Cluster 1
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka-1:19091"
+      CLUSTER_ID: ${KAFKA1_CLUSTER_ID:-C8T4oQvDRm-yA8R-q_zJww}
+      <<: *kafka_broker_common_env_vars
+
+  kafka-2:
+    image: confluentinc/cp-kafka:8.1.1
+    container_name: kafka-2
+    ports:
+      - "9093:9093"
+    networks:
+      - factorhouse
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_LISTENERS: CONTROLLER://kafka-2:19091,LISTENER_DOCKER_INTERNAL://kafka-2:19093,LISTENER_DOCKER_EXTERNAL://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: LISTENER_DOCKER_INTERNAL://kafka-2:19093,LISTENER_DOCKER_EXTERNAL://${DOCKER_HOST_IP:-127.0.0.1}:9093
+      # Isolated quorum and unique cluster ID for Cluster 1
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka-2:19091"
+      CLUSTER_ID: ${KAFKA2_CLUSTER_ID:-D9U5pRzERn-zB9S-r_aKxx}
+      <<: *kafka_broker_common_env_vars
+
+  schema:
+    image: confluentinc/cp-schema-registry:8.1.1
+    container_name: schema_registry
+    ports:
+      - "8081:8081"
+    networks:
+      - factorhouse
+    depends_on:
+      - kafka-1
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: "schema"
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: "kafka-1:19092"
+      # Force the _schemas topic to only use 1 replica
+      SCHEMA_REGISTRY_KAFKASTORE_REPLICATION_FACTOR: 1
+      SCHEMA_REGISTRY_AUTHENTICATION_METHOD: BASIC
+      SCHEMA_REGISTRY_AUTHENTICATION_REALM: schema
+      SCHEMA_REGISTRY_AUTHENTICATION_ROLES: schema-admin
+      SCHEMA_REGISTRY_OPTS: -Djava.security.auth.login.config=/etc/schema/schema_jaas.conf
+    volumes:
+      - ./resources/kpow/schema:/etc/schema
+
+  connect:
+    image: confluentinc/cp-kafka-connect:8.1.1
+    container_name: connect
+    restart: unless-stopped
+    depends_on:
+      - kafka-1
+    ports:
+      - 8083:8083
+    networks:
+      - factorhouse
+    environment:
+      CONNECT_BOOTSTRAP_SERVERS: "kafka-1:19092"
+      CONNECT_REST_PORT: "8083"
+      CONNECT_GROUP_ID: "fh-local-connect"
+      CONNECT_CONFIG_STORAGE_TOPIC: "fh-local-connect-config"
+      CONNECT_OFFSET_STORAGE_TOPIC: "fh-local-connect-offsets"
+      CONNECT_STATUS_STORAGE_TOPIC: "fh-local-connect-status"
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_KEY_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+      CONNECT_VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+      CONNECT_INTERNAL_KEY_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+      CONNECT_INTERNAL_VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+      CONNECT_REST_ADVERTISED_HOST_NAME: "localhost"
+      CONNECT_LOG4J_ROOT_LOGLEVEL: "INFO"
+      CONNECT_PLUGIN_PATH: /usr/share/java/,/etc/kafka-connect/jars
+    volumes:
+      - ./resources/connector:/etc/kafka-connect/jars
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:8083/ || exit 1" ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+  # wb-server:
+  #   image: factorhouse/wb-server
+  #   build:
+  #     context: ./resources/webhook
+  #   container_name: wb-server
+  #   pull_policy: never
+  #   command: [ "flask", "run", "--host=0.0.0.0", "--port=9000" ]
+  #   ports:
+  #     - "9000:9000"
+  #   networks:
+  #     - factorhouse
+  #   environment:
+  #     FLASK_APP: server.py
+  #     FLASK_DEBUG: "1"
+  #     PYTHONUNBUFFERED: "1"
+  #   volumes:
+  #     - ./server.py:/app/server.py
+
+networks:
+  factorhouse:
+    name: factorhouse

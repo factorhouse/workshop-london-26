@@ -1,0 +1,119 @@
+tenants:
+  - name: "Global"
+    description: "All configured Kafka resources"
+    resources:
+      - include:
+          - ["*"]
+    roles:
+      - "kafka-admins"
+  - name: "Tenant 1"
+    description: "Tenant 1 Kafka resources"
+    resources:
+      - include:
+          - ["cluster", "cluster-1"]
+          - ["connect", "*"]
+          - ["schema", "*"]
+      - exclude:
+          - ["cluster", "*", "topic", "oprtr*"]
+          - ["cluster", "*", "topic", "__oprtr*"]
+          - ["cluster", "*", "group", "oprtr*"]
+    roles:
+      - "kafka-admins"
+      - "kafka-owners"
+      - "kafka-editors"
+      - "kafka-readers"
+
+admin_roles:
+  - "kafka-admins"
+
+authorized_roles:
+  - "kafka-admins"
+  - "kafka-owners"
+  - "kafka-editors"
+  - "kafka-readers"
+
+policies:
+  - actions:
+      - TOPIC_CREATE
+      - TOPIC_PRODUCE
+      - TOPIC_EDIT
+      - TOPIC_DELETE
+      - GROUP_EDIT
+      - ACL_EDIT
+      - BULK_ACTION
+    effect: Allow
+    resource:
+      - cluster
+      - "*"
+    roles: ["kafka-admins", "kafka-owners"]
+  - actions:
+      - CONNECT_CREATE
+      - CONNECT_EDIT
+    effect: Allow
+    resource:
+      - connect
+      - "*"
+    roles: ["kafka-admins", "kafka-owners"]
+  - actions:
+      - SCHEMA_EDIT
+      - SCHEMA_CREATE
+    effect: Allow
+    resource:
+      - schema
+      - "*"
+    roles: ["kafka-admins", "kafka-owners"]
+  - actions:
+      - BROKER_EDIT
+    effect: Allow
+    resource:
+      - cluster
+      - "*"
+    role: "kafka-admins"
+  - actions:
+      - BROKER_EDIT
+      - ACL_EDIT
+    effect: Deny
+    resource:
+      - cluster
+      - "*"
+    roles: ["kafka-owners", "kafka-editors"]
+  - actions:
+      - TOPIC_PRODUCE
+    effect: Allow
+    resource:
+      - cluster
+      - "*"
+    role: "kafka-editors"
+  - actions:
+      - TOPIC_CREATE
+      - TOPIC_EDIT
+      - TOPIC_DELETE
+      - GROUP_EDIT
+    effect: Stage
+    resource:
+      - cluster
+      - "*"
+    role: "kafka-editors"
+  - actions:
+      - SCHEMA_EDIT
+      - SCHEMA_CREATE
+    effect: Stage
+    resource:
+      - schema
+      - "*"
+    role: "kafka-editors"
+  - actions:
+      - CONNECT_CREATE
+      - CONNECT_EDIT
+    effect: Stage
+    resource:
+      - connect
+      - "*"
+    role: "kafka-editors"
+  - actions:
+      - TOPIC_INSPECT
+    effect: Allow
+    resource:
+      - cluster
+      - "*"
+    roles: ["kafka-admins", "kafka-owners", "kafka-editors", "kafka-readers"]
