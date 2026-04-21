@@ -20,6 +20,43 @@ Operating critical data infrastructure requires an immutable record of administr
 
 This lab demonstrates how to safely delegate self-service capabilities across different teams without compromising security. By logging in as different user personas (Admin, Owner, Editor, and Reader), you will experience how Kpow enforces Role-Based Access Control (RBAC) and tenant isolation. You'll see these roles in action, from read-only topic inspection to staging topic creations that require admin approval.
 
+### Tenant Isolation & Resource Visibility
+
+The configuration ensures developers only see business-relevant data.
+
+- **Global Tenant (Platform Team):**
+  - **Visibility:** Complete visibility (`["*"]`).
+  - **Purpose:** Platform administrators use this to monitor the health of the entire ecosystem, including Kpow's own internal state.
+- **Tenant 1 (Engineering/Dev Teams):**
+  - **Visibility:** Limited to `cluster-1`, all Connectors, and all Schemas.
+  - **Exclusions:** All internal Kpow topics and consumer groups (`oprtr*`, `__oprtr*`) are explicitly hidden.
+  - **Purpose:** Provides a noise-free environment where developers cannot see or accidentally modify the platform's underlying infrastructure.
+
+### Role Permissions Matrix
+
+| Action             | kafka-admins | kafka-owners | kafka-editors   | kafka-readers   |
+| :----------------- | :----------- | :----------- | :-------------- | :-------------- |
+| **BROKER_EDIT**    | Allow        | **Deny**     | **Deny**        | (Implicit Deny) |
+| **ACL_EDIT**       | Allow        | **Deny**     | **Deny**        | (Implicit Deny) |
+| **TOPIC_CREATE**   | Allow        | Allow        | **Stage**       | (Implicit Deny) |
+| **TOPIC_EDIT**     | Allow        | Allow        | **Stage**       | (Implicit Deny) |
+| **TOPIC_DELETE**   | Allow        | Allow        | **Stage**       | (Implicit Deny) |
+| **TOPIC_PRODUCE**  | Allow        | Allow        | Allow           | (Implicit Deny) |
+| **TOPIC_INSPECT**  | Allow        | Allow        | Allow           | Allow           |
+| **GROUP_EDIT**     | Allow        | Allow        | **Stage**       | (Implicit Deny) |
+| **BULK_ACTION**    | Allow        | Allow        | (Implicit Deny) | (Implicit Deny) |
+| **CONNECT_CREATE** | Allow        | Allow        | **Stage**       | (Implicit Deny) |
+| **CONNECT_EDIT**   | Allow        | Allow        | **Stage**       | (Implicit Deny) |
+| **SCHEMA_CREATE**  | Allow        | Allow        | **Stage**       | (Implicit Deny) |
+| **SCHEMA_EDIT**    | Allow        | Allow        | **Stage**       | (Implicit Deny) |
+
+**Security Design Principles**
+
+- **Mandatory Approval Process (Staging):** The `kafka-editors` role is designed for engineering staff performing daily operational tasks. While they can produce data and inspect topics, any structural changes—such as creating topics, modifying connectors, or updating schemas—are not applied immediately. These actions are **Staged**, requiring review and approval by an Admin or Owner before taking effect.
+- **Infrastructure Lockdown:** To ensure cluster stability, both `kafka-owners` and `kafka-editors` are explicitly **Denied** the ability to modify Broker configurations. Only the Platform Team (`kafka-admins`) can change underlying hardware and cluster-level settings.
+- **Centralized Security Governance:** To maintain a strict security perimeter, the ability to manage ACLs is restricted to the Platform Team. Both `kafka-owners` and `kafka-editors` are explicitly **Denied** the ability to modify security permissions, ensuring that access control remains a centralized administrative function.
+- **Deny by Default:** The configuration follows a strict security baseline where any action not explicitly granted to a role is automatically blocked. This **Implicit Deny** ensures that restricted roles, such as `kafka-readers`, cannot perform any state-changing actions like producing data or creating resources.
+
 ## Lab 4: Kafka Connect Management (20 mins)
 
 Explore how to deploy and manage data pipelines using both the Kpow UI and its enterprise API. We will walk through configuring a source connector via the UI to generate mock data, and deploying a sink connector via the API to write that data to MinIO. You'll learn how to monitor running tasks, verify the data flow, and properly clean up the connectors.
