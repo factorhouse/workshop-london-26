@@ -134,7 +134,7 @@ services:
       CONNECT_LOG4J_ROOT_LOGLEVEL: "INFO"
       CONNECT_PLUGIN_PATH: /usr/share/java/,/etc/kafka-connect/jars
     volumes:
-      - ./resources/connector:/etc/kafka-connect/jars
+      - ./resources/connector/jars:/etc/kafka-connect/jars
     healthcheck:
       test: [ "CMD-SHELL", "curl -f http://localhost:8083/ || exit 1" ]
       interval: 5s
