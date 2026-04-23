@@ -44,6 +44,7 @@ The configuration ensures developers only see business-relevant data.
 | **TOPIC_PRODUCE**  | Allow        | Allow        | Allow           | (Implicit Deny) |
 | **TOPIC_INSPECT**  | Allow        | Allow        | Allow           | Allow           |
 | **GROUP_EDIT**     | Allow        | Allow        | **Stage**       | (Implicit Deny) |
+| **GROUP_DELETE**   | Allow        | Allow        | **Stage**       | (Implicit Deny) |
 | **BULK_ACTION**    | Allow        | Allow        | (Implicit Deny) | (Implicit Deny) |
 | **CONNECT_CREATE** | Allow        | Allow        | **Stage**       | (Implicit Deny) |
 | **CONNECT_EDIT**   | Allow        | Allow        | **Stage**       | (Implicit Deny) |
@@ -52,7 +53,7 @@ The configuration ensures developers only see business-relevant data.
 
 **Security Design Principles**
 
-- **Mandatory Approval Process (Staging):** The `kafka-editors` role is designed for engineering staff performing daily operational tasks. While they can produce data and inspect topics, any structural changes—such as creating topics, modifying connectors, or updating schemas—are not applied immediately. These actions are **Staged**, requiring review and approval by an Admin or Owner before taking effect.
+- **Mandatory Approval Process (Staging):** The `kafka-editors` role is designed for engineering staff performing daily operational tasks. While they can produce data and inspect topics, any structural changes, such as creating topics, modifying connectors, or updating schemas, are not applied immediately. These actions are **Staged**, requiring review and approval by an Admin or Owner before taking effect.
 - **Infrastructure Lockdown:** To ensure cluster stability, both `kafka-owners` and `kafka-editors` are explicitly **Denied** the ability to modify Broker configurations. Only the Platform Team (`kafka-admins`) can change underlying hardware and cluster-level settings.
 - **Centralized Security Governance:** To maintain a strict security perimeter, the ability to manage ACLs is restricted to the Platform Team. Both `kafka-owners` and `kafka-editors` are explicitly **Denied** the ability to modify security permissions, ensuring that access control remains a centralized administrative function.
 - **Deny by Default:** The configuration follows a strict security baseline where any action not explicitly granted to a role is automatically blocked. This **Implicit Deny** ensures that restricted roles, such as `kafka-readers`, cannot perform any state-changing actions like producing data or creating resources.
