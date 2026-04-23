@@ -6,8 +6,8 @@ tenants:
           - ["*"]
     roles:
       - "kafka-admins"
-  - name: "Tenant 1"
-    description: "Tenant 1 Kafka resources"
+  - name: "AppTeam"
+    description: "Kafka resources for the application team"
     resources:
       - include:
           - ["cluster", "cluster-1"]
@@ -39,6 +39,7 @@ policies:
       - TOPIC_EDIT
       - TOPIC_DELETE
       - GROUP_EDIT
+      - GROUP_DELETE
       - ACL_EDIT
       - BULK_ACTION
     effect: Allow
@@ -89,6 +90,7 @@ policies:
       - TOPIC_EDIT
       - TOPIC_DELETE
       - GROUP_EDIT
+      - GROUP_DELETE
     effect: Stage
     resource:
       - cluster
