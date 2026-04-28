@@ -46,7 +46,7 @@ services:
       WEBHOOK_PROVIDER: ${WEBHOOK_PROVIDER:-generic}
       WEBHOOK_URL: ${WEBHOOK_URL:-http://webhook-server:9000}
     env_file:
-      - ./resources/kpow/config/setup.env # Kpow Configuration
+      - ./setup.env # Kpow Configuration
       - ./license.env # Kpow License Details
     mem_limit: 2G
     volumes:
