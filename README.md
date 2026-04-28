@@ -1,18 +1,89 @@
-# **[WORKSHOP TITLE]**
+# [WORKSHOP TITLE]
 
 Welcome to the **[WORKSHOP TITLE]**. As Apache Kafka usage scales within an organization, platform and engineering teams often face mounting challenges around ecosystem visibility, infrastructure security, and data integration. This workshop is designed to equip you with the strategies and tools necessary to transform your Kafka infrastructure from a reactive data pipe into a secure, self-service, and fully transparent platform.
 
 Rather than relying on fragmented CLI scripts and disconnected tools, you will explore a unified approach to managing your entire streaming ecosystem. We will cover how to streamline day-to-day platform operations, ranging from resolving complex data bottlenecks and enforcing strict multi-tenant access controls to seamlessly deploying integration pipelines and establishing real-time governance trails. By the end of this session, you will have the practical knowledge required to confidently operate, monitor, and secure mature Kafka environments while safely empowering developer productivity.
 
-## Welcome & Preparation (20 mins)
+## 🎯 Key Learning Objectives
 
-## Lab 1: Rapid Kafka Diagnostics (20 mins)
+By the end of this workshop, you will have hands-on experience with:
 
-In this lab, we will tackle the "Context Gap" using a live Kafka producer and consumer setup. We'll simulate a "Silent Stall" scenario where a poison pill message blocks a specific partition. You will learn how to use Kpow's unified interface to quickly trace the anomaly from high-level broker metrics down to the exact malformed message, and resolve the issue instantly by skipping the bad offset using Staged Mutations.
+- **Operational Governance:** Implement immutable audit trails via webhooks to capture and route every administrative change for real-time transparency.
+- **Rapid Incident Response:** Trace consumer stalls from high-level lag metrics down to the specific malformed message causing the bottleneck.
+- **Secure Self-Service:** Configure RBAC and multi-tenant isolation to safely delegate control to developers while protecting core infrastructure.
+- **Controlled Change Management:** Master "Staging" workflows to enforce mandatory administrative reviews before high-impact infrastructure changes take effect.
+- **Pipeline Lifecycle:** Streamline the deployment and monitoring of Kafka Connect pipelines using both a unified UI and Enterprise APIs.
+- **Advanced Observability:** Move beyond raw JMX metrics to visualize actionable, business-level telemetry using Prometheus and Grafana.
 
-## Lab 2: Real-Time Audit Trail via Webhooks (20 mins)
+## Preparation (20 mins)
+
+### Prerequisites
+
+Ensure you have the following installed and configured before starting the workshop:
+
+- **Docker and Docker Compose**: This is the only technical requirement. All workshop components—including Kafka brokers, Kpow, and the Python-based lab applications—will be deployed as Docker containers.
+- **Hardware**: 8GB RAM minimum (16GB recommended).
+- **Operating System**: macOS or Linux. (Windows users must use WSL2).
+- **Internet Connection**: Required for the initial download of Docker images.
+
+### Kpow Trial License
+
+This workshop uses Kpow to manage and monitor your Kafka ecosystem. You will need a free trial license to activate the platform.
+
+1.  **Generate Your License**: Visit the[Factor House Getting Started](https://account.factorhouse.io/auth/getting_started) page to generate your personal trial license.
+2.  **Create `license.env` File**:
+    - Create a new file named `license.env`.
+    - Copy the license environment variables provided by Factor House and paste them into this file.
+    - You can use `license.env.example` in that same directory as a reference for the correct format.
+
+---
+
+## Lab 1: Real-Time Audit Trail via Webhooks (20 mins)
 
 Operating critical data infrastructure requires an immutable record of administrative changes. Using Kpow on Docker Compose, this lab explores how to close the "Governance Gap." We will configure Kpow’s Webhook Integration to capture state-changing actions (like creating or deleting topics) and instantly route these audit events into communication channels like Slack for real-time operational transparency.
+
+### Webhook Configuration
+
+In this lab, Kpow is configured to route audit logs to a webhook. This configuration is managed within the [`setup.env`](./setup.env) file.
+
+Choose one of the following two paths:
+
+#### Option A: Generic (Default)
+
+No action is required. By default, Kpow routes audit logs to a local diagnostic server included in your Docker Compose setup.
+
+- **Logs visible at:** `docker compose logs -f webhook-server`
+
+#### Option B: Slack (Optional)
+
+If you wish to see live audit alerts in your own Slack workspace during this lab, follow these step-by-step instructions to create a Slack app and update your configuration.
+
+**Step 1: Configure the Slack App and Webhook**
+
+1. **Create a Slack app**: Navigate to the [Slack API website](https://api.slack.com/apps) and click on "Create New App". Choose to create it "From scratch".
+2. **Name your app and choose a workspace**: Provide a name for your application and select the Slack workspace where you want to post messages.
+3. **Enable incoming webhooks**: In your app settings page, go to "Incoming Webhooks" under the "Features" section. Toggle the feature on and then click "Add New Webhook to Workspace".
+4. **Select a channel**: Choose the channel where you want the Kpow notifications to be posted and click "Allow".
+5. **Copy the webhook URL**: After authorizing, you will be redirected back to the webhook configuration page. Copy the newly generated webhook URL. This URL is what you will use to configure Kpow.
+
+**Step 2: Update `setup.env`**
+Open `setup.env`, comment out the default **Generic** provider, and uncomment the **Slack** configuration with your valid URL:
+
+```bash
+# WEBHOOK_PROVIDER=generic
+# WEBHOOK_URL=http://webhook-server:9000
+
+WEBHOOK_PROVIDER=slack
+WEBHOOK_URL=https://hooks.slack.com/services/TXXX/BXXX/XXXX
+```
+
+Updating these variables in your `setup.env` file ensures that all administrative actions (such as topic creations, configuration edits, and ACL modifications) are routed directly to your Slack channel for real-time operational transparency.
+
+---
+
+## Lab 2: Rapid Kafka Diagnostics (20 mins)
+
+In this lab, we will tackle the "Context Gap" using a live Kafka producer and consumer setup. We'll simulate a "Silent Stall" scenario where a poison pill message blocks a specific partition. You will learn how to use Kpow's unified interface to quickly trace the anomaly from high-level broker metrics down to the exact malformed message, and resolve the issue instantly by skipping the bad offset using Staged Mutations.
 
 ## Break (10 mins)
 
