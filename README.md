@@ -21,9 +21,9 @@ By the end of this workshop, you will have hands-on experience with:
 
 Ensure you have the following installed and configured before starting the workshop:
 
-- **Docker and Docker Compose**: This is the only technical requirement. All workshop components—including Kafka brokers, Kpow, and the Python-based lab applications—will be deployed as Docker containers.
+- **Docker and Docker Compose**: This is the only technical requirement. All workshop components including Kafka brokers, Kpow, and the Python-based lab applications will be deployed as Docker containers.
 - **Hardware**: 8GB RAM minimum (16GB recommended).
-- **Operating System**: macOS or Linux. (Windows users must use WSL2).
+- **Operating System**: macOS or Linux. (Windows users are recommended to use WSL2).
 - **Internet Connection**: Required for the initial download of Docker images.
 
 ### Kpow Trial License
@@ -37,6 +37,34 @@ This workshop uses Kpow to manage and monitor your Kafka ecosystem. You will nee
     - You can use `license.env.example` in that same directory as a reference for the correct format.
 
 ---
+
+## Introduction to Worshop Content
+
+### Clone the Workshop repository
+
+The workshop content is hosted on GitHub. You need to clone the repository.
+
+```bash
+git clone https://github.com/factorhouse/workshop-london-26.git
+```
+
+Describe docker compose services and kpow configuration.
+
+```
+resources/
+├── kpow
+│   ├── config
+│   │   └── setup.env
+│   ├── jaas
+│   │   ├── hash-jaas.conf
+│   │   └── hash-realm.properties
+│   ├── rbac
+│   │   └── hash-rbac.yml
+│   └── schema
+│       ├── schema_jaas.conf
+│       └── schema_realm.properties
+│── docker-compose.yml
+```
 
 ## Lab 1: Real-Time Audit Trail via Webhooks (20 mins)
 
@@ -66,8 +94,9 @@ If you wish to see live audit alerts in your own Slack workspace during this lab
 4. **Select a channel**: Choose the channel where you want the Kpow notifications to be posted and click "Allow".
 5. **Copy the webhook URL**: After authorizing, you will be redirected back to the webhook configuration page. Copy the newly generated webhook URL. This URL is what you will use to configure Kpow.
 
-**Step 2: Update `setup.env`**
-Open `setup.env`, comment out the default **Generic** provider, and uncomment the **Slack** configuration with your valid URL:
+**Step 2: Update Kpow Configuration**
+
+Open [`setup.env`](./resources/kpow/config/setup.env), comment out the default **Generic** provider, and uncomment the **Slack** configuration with your valid URL:
 
 ```bash
 # WEBHOOK_PROVIDER=generic
@@ -79,11 +108,66 @@ WEBHOOK_URL=https://hooks.slack.com/services/TXXX/BXXX/XXXX
 
 Updating these variables in your `setup.env` file ensures that all administrative actions (such as topic creations, configuration edits, and ACL modifications) are routed directly to your Slack channel for real-time operational transparency.
 
+After updating the configuration, you can start the Kafka environment as follows.
+
+```bash
+docker compose up -d
+```
+
+Once started, you can create a topic and delete it. The corresponding audit logs will appeaer in the webshook server log (`generic`) or in your Slack channel (`slack`).
+
+Additionally Kpow provides user/audit logs.
+
+User can check their logs on Kpow.
+
+![](./images/lab1-user-log.png)
+
+Admins can check all audit logs on Kpow.
+
+![](./images/lab1-audit-log.png)
+
+Throughtout the lab, you'll be more audit logs will be created.
+
 ---
 
 ## Lab 2: Rapid Kafka Diagnostics (20 mins)
 
 In this lab, we will tackle the "Context Gap" using a live Kafka producer and consumer setup. We'll simulate a "Silent Stall" scenario where a poison pill message blocks a specific partition. You will learn how to use Kpow's unified interface to quickly trace the anomaly from high-level broker metrics down to the exact malformed message, and resolve the issue instantly by skipping the bad offset using Staged Mutations.
+
+Explains the Kafka app configurations
+
+```
+resources/diagnostics/
+├── consumer.py
+├── docker-compose.yml
+└── producer.py
+```
+
+First, deploy a Kafka producer and consumer apps.
+
+```bash
+docker compose -f resources/diagnostics/docker-compose.yml --profile all up -d
+```
+
+After your skipped offset, close the consumer apps because the consumer group status should be _Empty_ for a staged mutation to take place.
+
+```bash
+docker compose -f resources/diagnostics/docker-compose.yml --profile consumer down
+```
+
+Once the staged mutation (skip offset) is succeeded, restart the consumer apps.
+
+```bash
+docker compose -f resources/diagnostics/docker-compose.yml --profile consumer up -d
+```
+
+You'll see the consumer that subscribes the partition is no longer blocked and continue comume messages.
+
+If you want to stop the Kafka apps,
+
+```bash
+docker compose -f resources/diagnostics/docker-compose.yml --profile all down
+```
 
 ## Break (10 mins)
 
@@ -133,6 +217,177 @@ The configuration ensures developers only see business-relevant data.
 
 Explore how to deploy and manage data pipelines using both the Kpow UI and its enterprise API. We will walk through configuring a source connector via the UI to generate mock data, and deploying a sink connector via the API to write that data to MinIO. You'll learn how to monitor running tasks, verify the data flow, and properly clean up the connectors.
 
+Explain connector configuration - orders-ui.json
+
+```
+$ tree resources/connector/config/
+resources/connector/config/
+├── orders-api.json
+└── orders-ui.json
+```
+
+A Kafka connector can be deployed on the UI and API.
+
+### Deploy via UI
+
+1. Navigate to the **Connect** section and click _Create connector_ to get started.
+
+![](./images/lab5-create-connector-01.png)
+
+2. Select the _GeneratorSourceConnector_ connector
+
+![](./images/lab5-create-connector-02.png)
+
+3. Import the source connector configuration file ([`./resources/connector/config/orders-ui.json`](./resources/connector/config/orders-ui.json)) and hit _Create_.
+
+![](./images/lab5-create-connector-03.png)
+
+5. Once deployed, you can check the source connector and its tasks in the Kpow UI.
+
+![](./images/lab5-create-connector-04.png)
+
+### Deploy via API
+
+Now, you will create a new connector using the Kpow API. It is the same connector but sending message to a different topic.
+
+1. Generate base64 encoded value of an API key and set tenant header.
+
+The workshop environment pre-configures several users. For this demo, we'll use the `owner:password` credentials. Also, multi-tenancy is configured in Kpow, every HTTP reqeust should specify a tenant where the user belongs to.
+
+```bash
+AUTH_HEADER=$(echo "Authorization: Basic $(echo -n 'owner:password' | base64)")
+TENANT_HEADER="x-tenant-id: AppTeam"
+```
+
+2. Get Kafka Connect cluster ID
+
+To manage connectors via the API, we first need the Connect cluster ID. We'll store it in a separate variable.
+
+```bash
+curl -s -H "$AUTH_HEADER" -H "$TENANT_HEADER" \
+  http://localhost:3001/connect/v1/clusters
+```
+
+Example response:
+
+```json
+{
+  "clusters": [
+    {
+      "id": "connect-connect1-C8T4oQvDRm-yA8R-q_zJww",
+      "label": "Local Connect Cluster",
+      "type": "apache_connect"
+    }
+  ],
+  "metadata": {
+    "tenant_id": "AppTeam"
+  }
+}
+```
+
+This `CONNECT_ID` will be used in subsequent API calls to manage connectors.
+
+3. Create the Connector
+
+Now, make a POST request with _GeneratorSourceConnector_ connector configuration ([`./resources/connector/config/orders-api.json`](./resources/connector/config/orders-api.json)).
+
+```bash
+CONNECT_ID="connect-connect1-C8T4oQvDRm-yA8R-q_zJww"
+
+curl -s -i -X POST -H "$AUTH_HEADER" -H "$TENANT_HEADER" \
+  -H "Accept:application/json" -H  "Content-Type:application/json" \
+  http://localhost:3001/connect/v1/apache/$CONNECT_ID/connectors \
+  -d @resources/connector/config/orders-api.json
+```
+
+Example response:
+
+```json
+{
+  "name": "orders-api",
+  "metadata": {
+    "response_id": "2ad68a8d-cdd0-40db-86a3-1880977230c7",
+    "cluster_id": "cluster-1",
+    "is_staged": false,
+    "connect_id": "connect-connect1-C8T4oQvDRm-yA8R-q_zJww",
+    "tenant_id": "AppTeam"
+  }
+}
+```
+
+We can check the status of the API as shown below.
+
+```bash
+CONNECTOR_NAME="orders-api"
+
+curl -s -H "$AUTH_HEADER" -H "$TENANT_HEADER" \
+  http://localhost:3001/connect/v1/apache/$CONNECT_ID/connectors/$CONNECTOR_NAME
+```
+
+Example response:
+
+```json
+{
+  "name": "orders-api",
+  "type": "source",
+  "state": "RUNNING",
+  "worker_id": "localhost:8083",
+  "class": "com.amazonaws.mskdatagen.GeneratorSourceConnector",
+  "topics": [],
+  "tasks": [
+    {
+      "id": 0,
+      "state": "RUNNING",
+      "worker_id": "localhost:8083"
+    },
+    {
+      "id": 1,
+      "state": "RUNNING",
+      "worker_id": "localhost:8083"
+    }
+  ],
+  "metadata": {
+    "connect_id": "connect-connect1-C8T4oQvDRm-yA8R-q_zJww",
+    "tenant_id": "AppTeam"
+  }
+}
+```
+
+4. Delete the Connector
+
+You can delete the connector with the API as follows.
+
+```bash
+curl -X DELETE -H "$AUTH_HEADER" -H "$TENANT_HEADER" \
+  http://localhost:3001/connect/v1/apache/$CONNECT_ID/connectors/$CONNECTOR_NAME
+```
+
+Example response:
+
+```json
+{
+  "metadata": {
+    "response_id": "b3535d85-c0c2-4490-acd3-e3f2a5c3cc03",
+    "cluster_id": "cluster-1",
+    "is_staged": false,
+    "connect_id": "connect-connect1-C8T4oQvDRm-yA8R-q_zJww",
+    "tenant_id": "AppTeam"
+  }
+}
+```
+
 ## Lab 5: Prometheus Integration (10 mins)
 
 Standard Kafka monitoring often suffers from a "Quality Gap" due to noisy, raw JMX metrics. In this optional module, we will explore Kpow's built-in, high-fidelity telemetry engine. We will walk through pre-built dashboards in Grafana Cloud to demonstrate how Kpow bypasses raw JMX to automatically calculate actionable, business-level metrics for your Kafka environment, topics, consumer groups, and Connect clusters.
+
+## Clean-Up Environment
+
+You can clean up the environment as follows:
+
+```bash
+# Delete the Kafka apps in Lab 2 if not done so
+docker compose -f resources/diagnostics/docker-compose.yml --profile all down
+
+# Delete the Kafka environment
+docker compose down
+```
