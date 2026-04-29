@@ -355,7 +355,6 @@ Explore how to deploy and manage data pipelines using both the Kpow UI and its E
 In this lab, we use a pre-built configuration file to generate mock order data. The configuration files are located in the `resources` directory:
 
 ```text
-$ tree resources/connector/config/
 resources/connector/config/
 ├── orders-api.json
 └── orders-ui.json
