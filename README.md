@@ -4,7 +4,19 @@ Welcome to the **[WORKSHOP TITLE]**. As Apache Kafka usage scales within an orga
 
 Rather than relying on fragmented CLI scripts and disconnected tools, you will explore a unified approach to managing your entire streaming ecosystem. We will cover how to streamline day-to-day platform operations, ranging from resolving complex data bottlenecks and enforcing strict multi-tenant access controls to seamlessly deploying integration pipelines and establishing real-time governance trails. By the end of this session, you will have the practical knowledge required to confidently operate, monitor, and secure mature Kafka environments while safely empowering developer productivity.
 
-## 🎯 Key Learning Objectives
+## Table of Contents
+
+- [Learning Objectives](#learning-objectives)
+- [Preparation](#preparation)
+- [Introduction to Workshop Content](#introduction-to-workshop-content)
+- [Lab 1: Real-Time Audit Trail via Webhooks](#lab-1-real-time-audit-trail-via-webhooks)
+- [Lab 2: Rapid Kafka Diagnostics](#lab-2-rapid-kafka-diagnostics)
+- [Lab 3: RBAC and Multi-Tenancy in Action](#lab-3-rbac-and-multi-tenancy-in-action)
+- [Lab 4: Kafka Connect Management](#lab-4-kafka-connect-management)
+- [Lab 5: Prometheus Integration](#lab-5-prometheus-integration)
+- [Environment Clean Up](#environment-clean-up)
+
+## Learning Objectives
 
 By the end of this workshop, you will have hands-on experience with:
 
@@ -15,7 +27,9 @@ By the end of this workshop, you will have hands-on experience with:
 - **Pipeline Lifecycle:** Streamline the deployment and monitoring of Kafka Connect pipelines using both a unified UI and Enterprise APIs.
 - **Advanced Observability:** Move beyond raw JMX metrics to visualize actionable, business-level telemetry using Prometheus and Grafana.
 
-## Preparation (20 mins)
+---
+
+## Preparation
 
 ### Prerequisites
 
@@ -91,7 +105,7 @@ resources/
 
 ---
 
-## Lab 1: Real-Time Audit Trail via Webhooks (20 mins)
+## Lab 1: Real-Time Audit Trail via Webhooks
 
 Operating critical data infrastructure requires an immutable record of administrative changes. Using Kpow on Docker Compose, this lab explores how to close the "Governance Gap." We will configure Kpow's Webhook Integration to capture state-changing actions (like creating or deleting topics) and instantly route these audit events into communication channels like Slack for real-time operational transparency.
 
@@ -161,7 +175,7 @@ Throughout the labs, you will see more audit logs being created.
 
 ---
 
-## Lab 2: Rapid Kafka Diagnostics (20 mins)
+## Lab 2: Rapid Kafka Diagnostics
 
 We will simulate a "Silent Stall" scenario where a poison pill message blocks a specific partition. You will learn how to use Kpow's unified interface to quickly trace the anomaly from high-level broker metrics down to the exact malformed message, and resolve the issue instantly by skipping the bad offset using Staged Mutations.
 
@@ -236,7 +250,7 @@ Wait a moment while the producer sends data. Eventually, it will inject the malf
 
 Now that the poison pill is identified, we need to unblock the partition by forcing the consumer to skip over the bad message.
 
-**1. Schedule Skip**
+**1. Select Skip Offset**
 
 Go back to the **Consumers** menu. In the action menu for the stuck group member, select **Skip offset**. This initiates a [Staged Mutation](https://docs.factorhouse.io/kpow/workflow/staged-mutations), and its status is marked as _Scheduled_.
 
@@ -250,7 +264,7 @@ For Kpow to safely apply this offset change, the consumer group status must be _
 docker compose -f resources/diagnostics/docker-compose.yml --profile consumer down
 ```
 
-**3. Apply and Restart**
+**3. Restart Consumers**
 
 Kpow detects that the group has stopped and automatically applies the staged mutation. Once the mutation status shows as _Succeeded_ in the Kpow UI, restart your consumer application:
 
@@ -272,11 +286,7 @@ docker compose -f resources/diagnostics/docker-compose.yml --profile all down
 
 ---
 
-## Break (10 mins)
-
----
-
-## Lab 3: RBAC and Multi-Tenancy in Action (20 mins)
+## Lab 3: RBAC and Multi-Tenancy in Action
 
 This lab demonstrates how to safely delegate self-service capabilities across different teams without compromising security. By logging in as different user personas (Admin, Owner, Editor, and Reader), you will experience how Kpow enforces Role-Based Access Control (RBAC) and tenant isolation. You'll see these roles in action, from read-only topic inspection to staging topic creations that require admin approval.
 
@@ -336,7 +346,7 @@ Once approved, the topic is successfully created on the Kafka cluster.
 
 ![](./images/lab3-04-topic-created.png)
 
-## Lab 4: Kafka Connect Management (20 mins)
+## Lab 4: Kafka Connect Management
 
 Explore how to deploy and manage data pipelines using both the Kpow UI and its Enterprise API. We will walk through configuring a source connector via the UI to generate mock data, and deploying another instance of the connector via the API. You will learn how to monitor running tasks, verify the data flow, and properly clean up the connectors.
 
@@ -526,18 +536,18 @@ curl -X DELETE -H "$AUTH_HEADER" -H "$TENANT_HEADER" \
 
 ---
 
-## Lab 5: Prometheus Integration (10 mins)
+## Lab 5: Prometheus Integration
 
 Standard Kafka monitoring often suffers from a "Quality Gap" due to noisy, raw JMX metrics. In this optional module, we will explore Kpow's built-in, high-fidelity telemetry engine. We will walk through pre-built dashboards in Grafana Cloud to demonstrate how Kpow bypasses raw JMX to automatically calculate actionable, business-level metrics for your Kafka environment, topics, consumer groups, and Connect clusters.
 
-## Clean-Up Environment
+## Environment Clean Up
 
-You can clean up the environment as follows:
+Once you have completed the workshop, you can tear down the environment and remove all associated resources by running the following commands:
 
 ```bash
-# Delete the Kafka apps in Lab 2 if not done so
+# Stop and remove the diagnostic applications from Lab 2 (if still running)
 docker compose -f resources/diagnostics/docker-compose.yml --profile all down
 
-# Delete the Kafka environment
+# Tear down the main Kafka environment, Kpow, and associated services
 docker compose down
 ```
