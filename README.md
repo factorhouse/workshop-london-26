@@ -38,19 +38,35 @@ This workshop uses Kpow to manage and monitor your Kafka ecosystem. You will nee
 
 ---
 
-## Introduction to Worshop Content
+## Introduction to Workshop Content
 
 ### Clone the Workshop repository
 
-The workshop content is hosted on GitHub. You need to clone the repository.
+The workshop content is hosted on GitHub. You need to clone the repository to access the configuration files and diagnostic scripts.
 
 ```bash
 git clone https://github.com/factorhouse/workshop-london-26.git
+cd factorhouse-workshop-london-26
 ```
 
-Describe docker compose services and kpow configuration.
+### Architecture and Configuration
 
-```
+The workshop environment is entirely containerized. The `docker-compose.yml` file orchestrates a complete enterprise streaming stack featuring two independent KRaft-based Kafka clusters to demonstrate multi-cluster management and multi-tenancy.
+
+The environment includes the following services:
+
+- **kafka-1**: The primary Kafka broker.
+- **kafka-2**: A standalone Kafka broker acting as a secondary environment.
+- **schema**: Confluent Schema Registry secured with Basic Authentication.
+- **connect**: Kafka Connect cluster for data integration pipelines.
+- **kpow**: The central unified interface and Enterprise API for managing the ecosystem.
+- **webhook-server**: A local Python diagnostic server that captures governance events.
+
+### Kpow Configuration Structure
+
+To simulate an enterprise environment, Kpow is configured with strict security and governance parameters. These configurations are stored in the `resources/` directory:
+
+```text
 resources/
 ├── kpow
 │   ├── config
@@ -63,16 +79,25 @@ resources/
 │   └── schema
 │       ├── schema_jaas.conf
 │       └── schema_realm.properties
-│── docker-compose.yml
+└── docker-compose.yml
 ```
+
+**Configuration Breakdown:**
+
+- **`config/setup.env`**: The central environment file. It configures Kpow to connect to both Kafka clusters, Kafka Connect, and the Schema Registry. It also enables the Enterprise API and configures webhook routing for Lab 1.
+- **`jaas/`**: Handles Authentication. The `hash-realm.properties` file defines the four distinct user personas we will use in the workshop: `admin`, `owner`, `editor`, and `reader`.
+- **`rbac/`**: Handles Authorization. The `hash-rbac.yml` file defines our Role-Based Access Control policies, mapping the user personas to specific permissions and isolating tenant resources.
+- **`schema/`**: Contains the JAAS configuration to secure the Schema Registry with Basic Authentication.
+
+---
 
 ## Lab 1: Real-Time Audit Trail via Webhooks (20 mins)
 
-Operating critical data infrastructure requires an immutable record of administrative changes. Using Kpow on Docker Compose, this lab explores how to close the "Governance Gap." We will configure Kpow’s Webhook Integration to capture state-changing actions (like creating or deleting topics) and instantly route these audit events into communication channels like Slack for real-time operational transparency.
+Operating critical data infrastructure requires an immutable record of administrative changes. Using Kpow on Docker Compose, this lab explores how to close the "Governance Gap." We will configure Kpow's Webhook Integration to capture state-changing actions (like creating or deleting topics) and instantly route these audit events into communication channels like Slack for real-time operational transparency.
 
 ### Webhook Configuration
 
-In this lab, Kpow is configured to route audit logs to a webhook. This configuration is managed within the [`setup.env`](./setup.env) file.
+In this lab, Kpow is configured to route audit logs to a webhook. This configuration is managed within the [`setup.env`](./resources/kpow/config/setup.env) file.
 
 Choose one of the following two paths:
 
@@ -88,7 +113,7 @@ If you wish to see live audit alerts in your own Slack workspace during this lab
 
 **Step 1: Configure the Slack App and Webhook**
 
-1. **Create a Slack app**: Navigate to the [Slack API website](https://api.slack.com/apps) and click on "Create New App". Choose to create it "From scratch".
+1. **Create a Slack app**: Navigate to the[Slack API website](https://api.slack.com/apps) and click on "Create New App". Choose to create it "From scratch".
 2. **Name your app and choose a workspace**: Provide a name for your application and select the Slack workspace where you want to post messages.
 3. **Enable incoming webhooks**: In your app settings page, go to "Incoming Webhooks" under the "Features" section. Toggle the feature on and then click "Add New Webhook to Workspace".
 4. **Select a channel**: Choose the channel where you want the Kpow notifications to be posted and click "Allow".
@@ -108,68 +133,148 @@ WEBHOOK_URL=https://hooks.slack.com/services/TXXX/BXXX/XXXX
 
 Updating these variables in your `setup.env` file ensures that all administrative actions (such as topic creations, configuration edits, and ACL modifications) are routed directly to your Slack channel for real-time operational transparency.
 
-After updating the configuration, you can start the Kafka environment as follows.
+### Starting the Environment and Generating Logs
+
+With your webhook configuration in place, start the Kafka environment:
 
 ```bash
 docker compose up -d
 ```
 
-Once started, you can create a topic and delete it. The corresponding audit logs will appeaer in the webshook server log (`generic`) or in your Slack channel (`slack`).
+Once started, open the Kpow UI (http://localhost:3000), log in as `admin` (password: `password`), and create a new topic. Then, delete that same topic.
 
-Additionally Kpow provides user/audit logs.
+The corresponding audit logs will immediately appear in the webhook server log (if using the generic option) or in your designated Slack channel (if using the Slack option).
 
-User can check their logs on Kpow.
+**In-App Audit Logging**
+
+In addition to external webhooks, Kpow maintains a searchable internal audit log.
+
+Individual users can check their personal logs on Kpow:
 
 ![](./images/lab1-user-log.png)
 
-Admins can check all audit logs on Kpow.
+Kafka administrators can view the global audit logs covering all users across the entire environment:
 
 ![](./images/lab1-audit-log.png)
 
-Throughtout the lab, you'll be more audit logs will be created.
+Throughout the labs, you will see more audit logs being created.
 
 ---
 
 ## Lab 2: Rapid Kafka Diagnostics (20 mins)
 
-In this lab, we will tackle the "Context Gap" using a live Kafka producer and consumer setup. We'll simulate a "Silent Stall" scenario where a poison pill message blocks a specific partition. You will learn how to use Kpow's unified interface to quickly trace the anomaly from high-level broker metrics down to the exact malformed message, and resolve the issue instantly by skipping the bad offset using Staged Mutations.
+We will simulate a "Silent Stall" scenario where a poison pill message blocks a specific partition. You will learn how to use Kpow's unified interface to quickly trace the anomaly from high-level broker metrics down to the exact malformed message, and resolve the issue instantly by skipping the bad offset using Staged Mutations.
 
-Explains the Kafka app configurations
+### Lab Application Architecture
 
-```
+The diagnostic lab uses a custom Python-based Kafka producer and a distributed consumer group to simulate a real-world microservice failure. The configuration files are located in:
+
+```text
 resources/diagnostics/
 ├── consumer.py
 ├── docker-compose.yml
 └── producer.py
 ```
 
-First, deploy a Kafka producer and consumer apps.
+**1. Producer ([`producer.py`](./resources/diagnostics/producer.py))**
+
+The producer script automatically creates an `orders` topic with 3 partitions. It begins publishing a steady stream of valid JSON order events where the `amount` field is a number. After a configured threshold, the script intentionally injects a "Poison Pill" directly into Partition 2. This malformed message contains the string `"ONE THOUSAND DOLLARS"` instead of a numeric value.
+
+**2. Consumer ([`consumer.py`](./resources/diagnostics/consumer.py))**
+
+The consumer simulates a strict financial application. It expects the `amount` field to be parseable as a Decimal. Crucially, the consumer is configured with `"enable.auto.commit": False`.
+
+When it encounters the Poison Pill on Partition 2, the data validation fails. Because auto-commit is disabled, the application does not simply skip the message. Instead, it enters an infinite retry loop. It logs a failure, seeks back to the exact same failed offset, and tries again. Because it continues to poll the broker during this loop, it sends regular heartbeats. The broker believes the consumer is perfectly healthy, but logically, it is completely stuck.
+
+**3. Deployment ([`docker-compose.yml`](./resources/diagnostics/docker-compose.yml))**
+
+The provided Compose file orchestrates these scripts using the official Python Docker image.
+
+- **Replication:** It deploys 3 replicas of the consumer service to match the 3 topic partitions, creating a realistic distributed consumer group named `orders-fulfillment`.
+- **Profiles:** The services are tagged with Docker Compose profiles (`producer`, `consumer`, and `all`). This allows us to start and stop the producer and consumer independently, which is a required step when applying an offset mutation later in the lab.
+
+### Start the Lab Applications
+
+Deploy the Kafka producer and consumer apps by running:
 
 ```bash
 docker compose -f resources/diagnostics/docker-compose.yml --profile all up -d
 ```
 
-After your skipped offset, close the consumer apps because the consumer group status should be _Empty_ for a staged mutation to take place.
+### Scenario: Silent Stall
+
+Wait a moment while the producer sends data. Eventually, it will inject the malformed Poison Pill message into Partition 2.
+
+**Symptom:** The consumer processing that specific partition crashes and enters its infinite retry loop. It continues to send heartbeats, so the service looks "alive", but total consumer lag begins to increase steadily.
+
+💡 _In our controlled workshop environment, this is easy to identify. In a real-world, high-volume production environment, correlating these fragmented symptoms is notoriously difficult._
+
+### Investigating with Kpow
+
+**1. Inspect Topic Health**
+
+- Navigate to the **Topics** menu in Kpow.
+- Select the `orders` topic and view the **Overview** tab. At first glance, the aggregate data looks healthy because the majority of partitions are still processing traffic.
+- Switch to the **Details** tab and look at the Topic Partitions table. Here, the discrepancy is obvious. In Partition 2, messages are continuously being written, but the read rate is zero. Traffic is entering the partition, but nothing is leaving.
+
+**2. Identify Stuck Consumer**
+
+- Navigate to the **Consumers** menu and select the `orders-fulfillment` consumer group.
+- In the **Overview** tab, you can spot the issue immediately. The total consumer lag is increasing, yet no idle members are detected and messages continue to be consumed on other partitions.
+- Switch to the **Details** tab for a granular view. You can see that one specific group member is stuck on a particular offset. The lag for that partition is accumulating rapidly.
+
+**3. Discover Root Cause (Poison Pill)**
+
+- To confirm what is blocking the pipeline, click the action menu (three dots) on the right side of the stuck group member and select **Inspect data**.
+- This opens the **Data Inspect** view with the affected topic partition and offset pre-selected.
+- You can use [kJQ](https://docs.factorhouse.io/kpow/language/kjq/manual) to filter the results.
+- Click the **Search** button. You will instantly see the malformed message value ("ONE THOUSAND DOLLARS" instead of a number) that caused the application logic to crash.
+
+![](./images/lab2-01-inspect.png)
+
+### Resolving the Incident via Staged Mutation
+
+Now that the poison pill is identified, we need to unblock the partition by forcing the consumer to skip over the bad message.
+
+**1. Schedule Skip**
+
+Go back to the **Consumers** menu. In the action menu for the stuck group member, select **Skip offset**. This initiates a [Staged Mutation](https://docs.factorhouse.io/kpow/workflow/staged-mutations), and its status is marked as _Scheduled_.
+
+![](./images/lab2-02-skip-offset.png)
+
+**2. Stop Consumers**
+
+For Kpow to safely apply this offset change, the consumer group status must be _Empty_ to prevent state conflicts. Stop your consumer application instances:
 
 ```bash
 docker compose -f resources/diagnostics/docker-compose.yml --profile consumer down
 ```
 
-Once the staged mutation (skip offset) is succeeded, restart the consumer apps.
+**3. Apply and Restart**
+
+Kpow detects that the group has stopped and automatically applies the staged mutation. Once the mutation status shows as _Succeeded_ in the Kpow UI, restart your consumer application:
 
 ```bash
 docker compose -f resources/diagnostics/docker-compose.yml --profile consumer up -d
 ```
 
-You'll see the consumer that subscribes the partition is no longer blocked and continue comume messages.
+You will see that the consumer subscribed to Partition 2 is no longer blocked and resumes processing messages. The stuck lag drains immediately, and the missing orders begin to process successfully.
 
-If you want to stop the Kafka apps,
+![](./images/lab2-03-consumer-details.png)
+
+### Clean up
+
+Once you have completed the lab, stop the diagnostic applications to conserve resources:
 
 ```bash
 docker compose -f resources/diagnostics/docker-compose.yml --profile all down
 ```
 
+---
+
 ## Break (10 mins)
+
+---
 
 ## Lab 3: RBAC and Multi-Tenancy in Action (20 mins)
 
@@ -213,62 +318,90 @@ The configuration ensures developers only see business-relevant data.
 - **Centralized Security Governance:** To maintain a strict security perimeter, the ability to manage ACLs is restricted to the Platform Team. Both `kafka-owners` and `kafka-editors` are explicitly **Denied** the ability to modify security permissions, ensuring that access control remains a centralized administrative function.
 - **Deny by Default:** The configuration follows a strict security baseline where any action not explicitly granted to a role is automatically blocked. This **Implicit Deny** ensures that restricted roles, such as `kafka-readers`, cannot perform any state-changing actions like producing data or creating resources.
 
+### Example Workflow
+
+Users with the `kafka-readers` role are implicitly denied permission to create topics. If a reader attempts to create a topic, Kpow will display a permission denied error.
+
+![](./images/lab3-01-reader-create-topic.png)
+
+In contrast, users with the `kafka-editors` role have `Stage` permissions for topic creation. When an editor creates a topic, the action is not executed immediately but is instead staged for review.
+
+![](./images/lab3-02-editor-create-topic.png)
+
+A user with the `kafka-admins` role must then review the staged mutation to either approve or deny the request.
+
+![](./images/lab3-03-admin-approve.png)
+
+Once approved, the topic is successfully created on the Kafka cluster.
+
+![](./images/lab3-04-topic-created.png)
+
 ## Lab 4: Kafka Connect Management (20 mins)
 
-Explore how to deploy and manage data pipelines using both the Kpow UI and its enterprise API. We will walk through configuring a source connector via the UI to generate mock data, and deploying a sink connector via the API to write that data to MinIO. You'll learn how to monitor running tasks, verify the data flow, and properly clean up the connectors.
+Explore how to deploy and manage data pipelines using both the Kpow UI and its Enterprise API. We will walk through configuring a source connector via the UI to generate mock data, and deploying another instance of the connector via the API. You will learn how to monitor running tasks, verify the data flow, and properly clean up the connectors.
 
-Explain connector configuration - orders-ui.json
+### Connector Configuration
 
-```
+In this lab, we use a pre-built configuration file to generate mock order data. The configuration files are located in the `resources` directory:
+
+```text
 $ tree resources/connector/config/
 resources/connector/config/
 ├── orders-api.json
 └── orders-ui.json
 ```
 
-A Kafka connector can be deployed on the UI and API.
+Let's look at the key components of `orders-ui.json`:
+
+- **Connector Class**: It uses `com.amazonaws.mskdatagen.GeneratorSourceConnector` to generate continuous mock data.
+- **Converters**: The key is a simple String, while the value uses the `AvroConverter`. Notice how it connects directly to our secured Schema Registry (`http://schema:8081`) using Basic Auth credentials (`admin:admin`).
+- **Data Generation**: The `genv.*` fields define the schema and mock data rules (e.g., generating random UUIDs, realistic prices, and names).
+- **Single Message Transforms (SMTs)**: The `transforms` block shapes the data in flight. It extracts the `order_id` to use as the Kafka message key, converts the `bid_time` string into a proper Timestamp, and applies a custom transform (`UnwrapUnionTransform`) included in our plugin directory.
+
+Kafka Connect pipelines can be deployed manually via the UI or programmatically via the API. We will explore both methods.
 
 ### Deploy via UI
 
-1. Navigate to the **Connect** section and click _Create connector_ to get started.
+1\. Navigate to the **Connect** section and click **Create connector** to get started.
 
 ![](./images/lab5-create-connector-01.png)
 
-2. Select the _GeneratorSourceConnector_ connector
+2\. Select the **GeneratorSourceConnector** from the list of available plugins.
 
 ![](./images/lab5-create-connector-02.png)
 
-3. Import the source connector configuration file ([`./resources/connector/config/orders-ui.json`](./resources/connector/config/orders-ui.json)) and hit _Create_.
+3\. Import the source connector configuration file ([`./resources/connector/config/orders-ui.json`](./resources/connector/config/orders-ui.json)) and click **Create**.
 
 ![](./images/lab5-create-connector-03.png)
 
-5. Once deployed, you can check the source connector and its tasks in the Kpow UI.
+4\. Once deployed, you can monitor the source connector state, view its active tasks, and inspect the generated data flowing into your topics directly from the Kpow UI.
 
 ![](./images/lab5-create-connector-04.png)
 
 ### Deploy via API
 
-Now, you will create a new connector using the Kpow API. It is the same connector but sending message to a different topic.
+Next, you will create a new connector using the Kpow Enterprise API. This uses the same plugin but deploys under a different name (`orders-api`).
 
-1. Generate base64 encoded value of an API key and set tenant header.
+1\. **Set Authentication and Tenant Headers**
 
-The workshop environment pre-configures several users. For this demo, we'll use the `owner:password` credentials. Also, multi-tenancy is configured in Kpow, every HTTP reqeust should specify a tenant where the user belongs to.
+The workshop environment pre-configures several users. For this demo, we will use the `owner:password` credentials. Because multi-tenancy is configured in Kpow, every HTTP request must specify the tenant where the user belongs.
 
 ```bash
 AUTH_HEADER=$(echo "Authorization: Basic $(echo -n 'owner:password' | base64)")
 TENANT_HEADER="x-tenant-id: AppTeam"
 ```
 
-2. Get Kafka Connect cluster ID
+2\. **Get Kafka Connect Cluster ID**
 
-To manage connectors via the API, we first need the Connect cluster ID. We'll store it in a separate variable.
+To manage connectors via the API, we first need the internal Connect cluster ID. We will fetch this and store it in a variable.
 
 ```bash
 curl -s -H "$AUTH_HEADER" -H "$TENANT_HEADER" \
   http://localhost:3001/connect/v1/clusters
 ```
 
-Example response:
+<details>
+<summary><strong>View Example Response</strong></summary>
 
 ```json
 {
@@ -285,11 +418,13 @@ Example response:
 }
 ```
 
-This `CONNECT_ID` will be used in subsequent API calls to manage connectors.
+</details>
 
-3. Create the Connector
+<br/>
 
-Now, make a POST request with _GeneratorSourceConnector_ connector configuration ([`./resources/connector/config/orders-api.json`](./resources/connector/config/orders-api.json)).
+3\. **Create the Connector**
+
+Now, make a POST request using the `orders-api.json` configuration file. Replace the `CONNECT_ID` below with the ID returned in the previous step.
 
 ```bash
 CONNECT_ID="connect-connect1-C8T4oQvDRm-yA8R-q_zJww"
@@ -300,7 +435,8 @@ curl -s -i -X POST -H "$AUTH_HEADER" -H "$TENANT_HEADER" \
   -d @resources/connector/config/orders-api.json
 ```
 
-Example response:
+<details>
+<summary><strong>View Example Response</strong></summary>
 
 ```json
 {
@@ -315,7 +451,11 @@ Example response:
 }
 ```
 
-We can check the status of the API as shown below.
+</details>
+
+<br/>
+
+We can verify the operational status of the new connector via the API:
 
 ```bash
 CONNECTOR_NAME="orders-api"
@@ -324,7 +464,8 @@ curl -s -H "$AUTH_HEADER" -H "$TENANT_HEADER" \
   http://localhost:3001/connect/v1/apache/$CONNECT_ID/connectors/$CONNECTOR_NAME
 ```
 
-Example response:
+<details>
+<summary><strong>View Example Response</strong></summary>
 
 ```json
 {
@@ -353,16 +494,21 @@ Example response:
 }
 ```
 
-4. Delete the Connector
+</details>
 
-You can delete the connector with the API as follows.
+<br/>
+
+4\. **Delete the Connector**
+
+Finally, to clean up the environment, you can delete the connector using the following API call:
 
 ```bash
 curl -X DELETE -H "$AUTH_HEADER" -H "$TENANT_HEADER" \
   http://localhost:3001/connect/v1/apache/$CONNECT_ID/connectors/$CONNECTOR_NAME
 ```
 
-Example response:
+<details>
+<summary><strong>View Example Response</strong></summary>
 
 ```json
 {
@@ -375,6 +521,10 @@ Example response:
   }
 }
 ```
+
+</details>
+
+---
 
 ## Lab 5: Prometheus Integration (10 mins)
 
