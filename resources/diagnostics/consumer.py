@@ -5,7 +5,7 @@ This script simulates a common production failure where a consumer is
 unable to process a specific message (the Poison Pill) and stops progressing.
 
 Key Technical Behaviors:
-1. Manual Commit: 'enable.auto.commit' is False. The consumer only commits
+1. Manual Commit: 'enable_auto_commit' is False. The consumer only commits
    offsets after successful processing.
 2. Schema Validation: The script attempts to convert the 'amount' field
    to a Decimal.
@@ -21,23 +21,12 @@ import os
 import time
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
-from confluent_kafka import Consumer, TopicPartition
+from kafka import KafkaConsumer, TopicPartition, OffsetAndMetadata
 
 # Configuration
 BOOTSTRAP_SERVERS = os.getenv("BOOTSTRAP_SERVERS", "localhost:9092")
 TOPIC = os.getenv("TOPIC", "orders")
 GROUP_ID = os.getenv("GROUP_ID", "orders-fulfillment")
-
-# Consumer configuration
-conf = {
-    "bootstrap.servers": BOOTSTRAP_SERVERS,
-    "group.id": GROUP_ID,
-    "auto.offset.reset": "earliest",
-    # CRITICAL: Disable auto-commit.
-    # This ensures we don't accidentally skip the bad message
-    # without explicitly being told to by an operator.
-    "enable.auto.commit": False,
-}
 
 
 def run_consumer():
@@ -45,8 +34,16 @@ def run_consumer():
     Main consumer loop that processes messages and simulates a stall
     on malformed data.
     """
-    c = Consumer(conf)
-    c.subscribe([TOPIC])
+    c = KafkaConsumer(
+        TOPIC,
+        bootstrap_servers=BOOTSTRAP_SERVERS,
+        group_id=GROUP_ID,
+        auto_offset_reset="earliest",
+        # CRITICAL: Disable auto-commit.
+        # This ensures we don't accidentally skip the bad message
+        # without explicitly being told to by an operator.
+        enable_auto_commit=False,
+    )
 
     print(f"Consumer started. Group: {GROUP_ID}")
     print(f"Subscribed to topic: {TOPIC}")
@@ -54,60 +51,67 @@ def run_consumer():
 
     try:
         while True:
-            # Poll Kafka for new messages
-            msg = c.poll(1.0)
+            # Poll Kafka for new messages (returns a dict grouped by TopicPartition)
+            records = c.poll(timeout_ms=1000)
 
-            if msg is None:
-                continue
-            if msg.error():
-                print(f"Consumer error: {msg.error()}")
-                continue
+            for tp, messages in records.items():
+                for msg in messages:
+                    processing_failed = False
 
-            # Business Logic / Processing
-            try:
-                payload = msg.value().decode("utf-8")
-                data = json.loads(payload)
+                    # 1. Business Logic / Processing
+                    try:
+                        payload = msg.value.decode("utf-8")
+                        data = json.loads(payload)
 
-                # TRAP: DATA VALIDATION
-                # We expect 'amount' to be a numeric value.
-                # The 'Poison Pill' sent by the producer contains a string here.
-                amount = data.get("amount")
-                try:
-                    # Attempt to parse as Decimal
-                    amount_value = Decimal(str(amount)).quantize(
-                        Decimal("0.01"), rounding=ROUND_HALF_UP
+                        # TRAP: DATA VALIDATION
+                        amount = data.get("amount")
+
+                        # Attempt to parse as Decimal
+                        amount_value = Decimal(str(amount)).quantize(
+                            Decimal("0.01"), rounding=ROUND_HALF_UP
+                        )
+
+                    except (InvalidOperation, TypeError, ValueError, KeyError):
+                        # Catch only data-related exceptions so we don't swallow Kafka errors
+                        processing_failed = True
+
+                    # 2. STALL MECHANISM
+                    if processing_failed:
+                        print("\n[!!!] PROCESSING FAILED [!!!]")
+                        print(
+                            f"Location: Partition {msg.partition}, Offset {msg.offset}"
+                        )
+                        print("Unknown error is encountered!")
+                        print(
+                            "Action: System retry initiated. Retrying in 2 seconds..."
+                        )
+
+                        # Seek back to the current offset to attempt re-processing
+                        c.seek(tp, msg.offset)
+
+                        # Wait before the next loop iteration
+                        time.sleep(2)
+
+                        # Break out of the message loop for this partition so we re-poll
+                        # the failed offset instead of processing subsequent messages
+                        break
+
+                    # 3. SUCCESS & COMMIT
+                    print(
+                        f"[OK] Partition {msg.partition} | Offset {msg.offset} | "
+                        f"Order: {data['order_id']} | Amount: {amount_value}"
                     )
-                except (InvalidOperation, TypeError):
-                    # This raises an error when the Poison Pill is encountered
-                    raise ValueError(
-                        f"Validation Failed! 'amount' must be numeric, got: {amount}"
-                    )
 
-                # If processing succeeds:
-                print(
-                    f"[OK] Partition {msg.partition()} | Offset {msg.offset()} | "
-                    f"Order: {data['order_id']} | Amount: {amount_value}"
-                )
+                    # Manually commit the offset only after successful processing.
+                    # Handle varying OffsetAndMetadata signatures across kafka-python versions.
+                    try:
+                        # kafka-python >= 2.3.1 requires leader_epoch (-1 indicates unknown)
+                        offset_meta = OffsetAndMetadata(msg.offset + 1, "", -1)
+                    except TypeError:
+                        # Older kafka-python versions
+                        offset_meta = OffsetAndMetadata(msg.offset + 1, "")
 
-                # Manually commit the offset only after successful processing
-                c.commit(message=msg, asynchronous=False)
-
-            except (InvalidOperation, TypeError, ValueError, KeyError) as e:
-                # STALL MECHANISM
-                # The application logic fails here. We log the coordinates
-                # so the operator can use Kpow to investigate.
-                print("\n[!!!] PROCESSING FAILED [!!!]")
-                print(f"Location: Partition {msg.partition()}, Offset {msg.offset()}")
-                print("Unknown error is encountered!")
-                # print(f"Technical Error: {e}")
-                print("Action: System retry initiated. Retrying in 2 seconds...")
-
-                # Seek back to the current offset to attempt re-processing
-                tp = TopicPartition(msg.topic(), msg.partition(), msg.offset())
-                c.seek(tp)
-
-                # Wait before the next loop iteration (simulates a backoff/retry)
-                time.sleep(2)
+                    c.commit({tp: offset_meta})
 
     except KeyboardInterrupt:
         print("\nConsumer stopping...")

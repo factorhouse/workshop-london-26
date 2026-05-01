@@ -20,18 +20,15 @@ import json
 import os
 import random
 
-from confluent_kafka import Producer
-from confluent_kafka.admin import AdminClient, NewTopic
+from kafka import KafkaProducer
+from kafka.admin import KafkaAdminClient, NewTopic
+from kafka.errors import TopicAlreadyExistsError
 
 # Configuration
-# Variables are pulled from the environment with sensible defaults for local dev.
 BOOTSTRAP_SERVERS = os.getenv("BOOTSTRAP_SERVERS", "localhost:9092")
 TOPIC = os.getenv("TOPIC", "orders")
 NUM_PARTITIONS = int(os.getenv("NUM_PARTITIONS", 3))
 POISON_COUNT = int(os.getenv("POISON_COUNT", 100))  # When to trigger the stall
-
-# Shared configuration for Kafka clients
-conf = {"bootstrap.servers": BOOTSTRAP_SERVERS}
 
 
 # Infrastructure Setup
@@ -41,31 +38,23 @@ def ensure_topic_exists():
     specified partition count and replication factor.
     """
     print(f"Checking/Creating topic '{TOPIC}' with {NUM_PARTITIONS} partitions...")
-    admin_client = AdminClient(conf)
-
-    # Define the new topic configuration
-    new_topic = NewTopic(TOPIC, num_partitions=NUM_PARTITIONS, replication_factor=1)
-
-    # Trigger creation (non-blocking call)
-    fs = admin_client.create_topics([new_topic])
-
-    # Wait for the result of the creation
-    for topic, f in fs.items():
-        try:
-            f.result()
-            print(f"Topic '{topic}' created successfully.")
-        except Exception as e:
-            # We catch errors (e.g., TopicAlreadyExists) and continue
-            print(f"Topic check result: {e}")
+    try:
+        admin_client = KafkaAdminClient(bootstrap_servers=BOOTSTRAP_SERVERS)
+        new_topic = NewTopic(
+            name=TOPIC, num_partitions=NUM_PARTITIONS, replication_factor=1
+        )
+        admin_client.create_topics([new_topic])
+        print(f"Topic '{TOPIC}' created successfully.")
+        admin_client.close()
+    except TopicAlreadyExistsError:
+        print(f"Topic '{TOPIC}' already exists.")
+    except Exception as e:
+        print(f"Topic check result: {e}")
 
 
-def delivery_report(err, msg):
-    """
-    Callback triggered by the Producer once a message is successfully delivered
-    or failed to be sent to the broker.
-    """
-    if err is not None:
-        print(f"Message delivery failed: {err}")
+def on_send_error(excp):
+    """Callback triggered if message delivery fails."""
+    print(f"Message delivery failed: {excp}")
 
 
 # Main Producer Logic
@@ -76,7 +65,11 @@ def run_producer():
     """
     ensure_topic_exists()
 
-    producer = Producer(conf)
+    producer = KafkaProducer(
+        bootstrap_servers=BOOTSTRAP_SERVERS,
+        key_serializer=lambda k: k.encode("utf-8"),
+        value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+    )
     print(f"Starting Producer to {TOPIC}...")
 
     message_count = 0
@@ -93,12 +86,10 @@ def run_producer():
             }
 
             # Send valid data to a random partition
-            producer.produce(
-                TOPIC, key=order_id, value=json.dumps(data), callback=delivery_report
-            )
+            future = producer.send(TOPIC, key=order_id, value=data)
+            future.add_errback(on_send_error)
 
             # 2. Poison Pill Injection Logic
-            # We target Partition 2 specifically to simulate a localized partition stall.
             if message_count == POISON_COUNT and not poison_pill_sent:
                 print(
                     "\n!!! TRIGGERING LAB SCENARIO: INJECTING POISON PILL TO PARTITION 2 !!!"
@@ -111,25 +102,19 @@ def run_producer():
                     "status": "CORRUPT",
                 }
 
-                producer.produce(
+                p_future = producer.send(
                     TOPIC,
                     key="POISON",
-                    value=json.dumps(poison_data),
+                    value=poison_data,
                     partition=2,  # Target the specific partition for the lab
-                    callback=delivery_report,
                 )
+                p_future.add_errback(on_send_error)
                 poison_pill_sent = True
 
-            # Serve delivery callbacks from previous produce calls
-            producer.poll(0)
             message_count += 1
 
             # Control production speed (10 msg/sec)
             time.sleep(0.1)
-
-            # Periodic log and flush to ensure data is moving
-            if message_count % 10 == 0:
-                producer.flush()
 
             if message_count % 200 == 0:
                 print(f"Total messages sent: {message_count}...")
@@ -140,6 +125,7 @@ def run_producer():
         # Final flush to clear the local producer queue before exiting
         print("Cleaning up and flushing remaining messages...")
         producer.flush()
+        producer.close()
 
 
 if __name__ == "__main__":
