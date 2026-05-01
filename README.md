@@ -537,7 +537,58 @@ curl -X DELETE -H "$AUTH_HEADER" -H "$TENANT_HEADER" \
 
 ## Lab 5: Prometheus Integration
 
-Standard Kafka monitoring often suffers from a "Quality Gap" due to noisy, raw JMX metrics. In this optional module, we will explore Kpow's built-in, high-fidelity telemetry engine. We will walk through pre-built dashboards in Grafana Cloud to demonstrate how Kpow bypasses raw JMX to automatically calculate actionable, business-level metrics for your Kafka environment, topics, consumer groups, and Connect clusters.
+Standard Kafka monitoring often suffers from a "Quality Gap" due to noisy, raw JMX metrics. In this optional module, we will explore Kpow's built-in, high-fidelity telemetry engine.
+
+Kpow bypasses raw JMX to automatically calculate actionable, business-level metrics for your Kafka environment, topics, consumer groups, and Connect clusters. Rather than requiring complex log parsing, Kpow exposes these metrics natively in the OpenMetrics (Prometheus) format.
+
+### Enable Prometheus Egress
+
+To expose the metrics endpoints, append the following environment variable to your [`setup.env`](./resources/kpow/config/setup.env) file:
+
+```bash
+PROMETHEUS_EGRESS=true
+```
+
+To secure all metric endpoints you can configure basic authentication:
+
+```
+PROMETHEUS_USERNAME=<username>
+PROMETHEUS_PASSWORD=<password>
+```
+
+### Access the Metrics Endpoints
+
+Once enabled, Kpow exposes three primary telemetry endpoints (see the full [Prometheus Endpoints documentation](https://docs.factorhouse.io/kpow/integration/prometheus/overview#endpoints)). You can view them directly in your browser or by using `curl` from your terminal:
+
+1. **Cluster and UI Metrics**: [http://localhost:3000/metrics/v1](http://localhost:3000/metrics/v1)
+2. **Topic Offsets**: [http://localhost:3000/offsets/v1](http://localhost:3000/offsets/v1)
+3. **Consumer Group Offsets**: [http://localhost:3000/group-offsets/v1](http://localhost:3000/group-offsets/v1)
+
+If you navigate to `http://localhost:3000/metrics/v1`, you will see a rich set of pre-calculated metrics ready to be scraped by a Prometheus server.
+
+**Example Output:**
+
+```text
+# HELP jvm_memory_non_heap_max The maximum amount of non-heap memory in bytes that can be used for memory management.
+# TYPE jvm_memory_non_heap_max gauge
+jvm_memory_non_heap_max{domain="factorhouse",id="90a884cb_bf97_4bda_9881_62fd01f26c7f",target="all",} -1.0
+# HELP group_consumption_inactive_mins The number of minutes a group has seen no reads since it was first observed.
+# TYPE group_consumption_inactive_mins gauge
+group_consumption_inactive_mins{domain="cluster",id="cluster_1",target="oprtr_compute_metrics_v2",} 0.0
+group_consumption_inactive_mins{domain="cluster",id="cluster_1",target="oprtr_compute_snapshots_v2",} 0.0
+# HELP topic_end_delta_total The total delta of end offsets of all topics in the Kafka cluster (produced msgs/s)
+# TYPE topic_end_delta_total gauge
+topic_end_delta_total{domain="cluster",id="cluster_1",target="all",} 9.61
+topic_end_delta_total{domain="cluster",id="cluster_2",target="all",} 0.0
+# HELP jetty_ws_connections The number of active WebSocket connections to Kpow.
+# TYPE jetty_ws_connections gauge
+jetty_ws_connections{domain="factorhouse",id="90a884cb_bf97_4bda_9881_62fd01f26c7f",target="all",} 0.0
+# HELP connect_connector_total The total number of connectors
+# TYPE connect_connector_total gauge
+connect_connector_total{domain="connect",id="connect_connect1_C8T4oQvDRm_yA8R_q_zJww",target="all",} 0.0
+```
+
+💡 _In a production environment, you would simply point your Prometheus server at these Kpow endpoints and import Factor House's [pre-built Grafana dashboards](https://github.com/factorhouse/factor-telemetry). This provides instant, highly accurate alerting without the headache of parsing thousands of noisy JMX attributes._
 
 ## Environment Clean Up
 
