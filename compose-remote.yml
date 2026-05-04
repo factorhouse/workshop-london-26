@@ -1,0 +1,87 @@
+services:
+  kpow:
+    image: factorhouse/kpow:latest
+    container_name: kpow
+    pull_policy: always
+    restart: always
+    ports:
+      - "3000:3000" # Kpow UI
+      - "3001:3001" # Kpow API
+    networks:
+      - factorhouse
+    profiles:
+      - main
+    env_file:
+      - ./setup.remote.env # Kpow Configuration
+      - ./license.env # Kpow License Details
+    mem_limit: 2G
+    volumes:
+      - ./resources/kpow/jaas:/etc/kpow/jaas
+      - ./resources/kpow/rbac:/etc/kpow/rbac
+
+  webhook-server:
+    image: python:3.12-slim
+    container_name: webhook-server
+    working_dir: /app
+    command: >
+      sh -c "pip install --no-cache-dir Flask &&
+             flask run --host=0.0.0.0 --port=9000"
+    ports:
+      - "9000:9000"
+    networks:
+      - factorhouse
+    profiles:
+      - main
+    environment:
+      FLASK_APP: server.py
+      FLASK_DEBUG: "1"
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - ./resources/webhook/server.py:/app/server.py
+
+  consumer:
+    image: python:3.12-slim
+    working_dir: /app
+    command: >
+      sh -c "pip install --no-cache-dir kafka-python==2.3.1 &&
+             python consumer.py"
+    networks:
+      - factorhouse
+    profiles:
+      - consumer
+      - client
+    deploy:
+      replicas: 3
+    environment:
+      TOPIC: "orders"
+      GROUP_ID: "orders-fulfillment"
+      PYTHONUNBUFFERED: 1
+    env_file:
+      - ./setup.remote.env
+    volumes:
+      - ./resources/diagnostics/consumer.py:/app/consumer.py
+
+  producer:
+    image: python:3.12-slim
+    working_dir: /app
+    command: >
+      sh -c "pip install --no-cache-dir kafka-python==2.3.1 &&
+             python producer.py"
+    networks:
+      - factorhouse
+    profiles:
+      - producer
+      - client
+    environment:
+      TOPIC: "orders"
+      NUM_PARTITIONS: 3
+      POISON_COUNT: 1000
+      PYTHONUNBUFFERED: 1
+    env_file:
+      - ./setup.remote.env
+    volumes:
+      - ./resources/diagnostics/producer.py:/app/producer.py
+
+networks:
+  factorhouse:
+    name: factorhouse
