@@ -39,14 +39,13 @@ services:
       - "3001:3001" # Kpow API
     networks:
       - factorhouse
+    profiles:
+      - main
     depends_on:
       connect:
         condition: service_healthy
-    environment:
-      WEBHOOK_PROVIDER: ${WEBHOOK_PROVIDER:-generic}
-      WEBHOOK_URL: ${WEBHOOK_URL:-http://webhook-server:9000}
     env_file:
-      - ./resources/kpow/config/setup.env # Kpow Configuration
+      - ./setup.local.env # Kpow Configuration
       - ./license.env # Kpow License Details
     mem_limit: 2G
     volumes:
@@ -60,6 +59,8 @@ services:
       - "9092:9092"
     networks:
       - factorhouse
+    profiles:
+      - main
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_LISTENERS: CONTROLLER://kafka-1:19091,LISTENER_DOCKER_INTERNAL://kafka-1:19092,LISTENER_DOCKER_EXTERNAL://0.0.0.0:9092
@@ -76,6 +77,8 @@ services:
       - "9093:9093"
     networks:
       - factorhouse
+    profiles:
+      - main
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_LISTENERS: CONTROLLER://kafka-2:19091,LISTENER_DOCKER_INTERNAL://kafka-2:19093,LISTENER_DOCKER_EXTERNAL://0.0.0.0:9093
@@ -92,6 +95,8 @@ services:
       - "8081:8081"
     networks:
       - factorhouse
+    profiles:
+      - main
     depends_on:
       - kafka-1
     environment:
@@ -116,6 +121,8 @@ services:
       - 8083:8083
     networks:
       - factorhouse
+    profiles:
+      - main
     environment:
       CONNECT_BOOTSTRAP_SERVERS: "kafka-1:19092"
       CONNECT_REST_PORT: "8083"
@@ -137,7 +144,7 @@ services:
       - ./resources/connector/jars:/etc/kafka-connect/jars
       - ./resources/connector/plugins:/etc/kafka-connect/plugins
     healthcheck:
-      test: [ "CMD-SHELL", "curl -f http://localhost:8083/ || exit 1" ]
+      test: ["CMD-SHELL", "curl -f http://localhost:8083/ || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -154,12 +161,55 @@ services:
       - "9000:9000"
     networks:
       - factorhouse
+    profiles:
+      - main
     environment:
       FLASK_APP: server.py
       FLASK_DEBUG: "1"
       PYTHONUNBUFFERED: "1"
     volumes:
       - ./resources/webhook/server.py:/app/server.py
+
+  consumer:
+    image: python:3.12-slim
+    working_dir: /app
+    command: >
+      sh -c "pip install --no-cache-dir kafka-python==2.3.1 &&
+             python consumer.py"
+    networks:
+      - factorhouse
+    profiles:
+      - consumer
+      - client
+    deploy:
+      replicas: 3
+    environment:
+      BOOTSTRAP_SERVERS: "kafka-1:19092"
+      TOPIC: "orders"
+      GROUP_ID: "orders-fulfillment"
+      PYTHONUNBUFFERED: 1
+    volumes:
+      - ./consumer.py:/app/consumer.py
+
+  producer:
+    image: python:3.12-slim
+    working_dir: /app
+    command: >
+      sh -c "pip install --no-cache-dir kafka-python==2.3.1 &&
+             python producer.py"
+    networks:
+      - factorhouse
+    profiles:
+      - producer
+      - client
+    environment:
+      BOOTSTRAP_SERVERS: "kafka-1:19092"
+      TOPIC: "orders"
+      NUM_PARTITIONS: 3
+      POISON_COUNT: 1000
+      PYTHONUNBUFFERED: 1
+    volumes:
+      - ./producer.py:/app/producer.py
 
 networks:
   factorhouse:

@@ -14,9 +14,17 @@ tenants:
           - ["connect", "*"]
           - ["schema", "*"]
       - exclude:
+          - ["cluster", "*", "topic", "config_storage*"]
+          - ["cluster", "*", "topic", "offset_storage*"]
+          - ["cluster", "*", "topic", "status_storage*"]
           - ["cluster", "*", "topic", "oprtr*"]
+          - ["cluster", "*", "topic", "instaclustr*"]
           - ["cluster", "*", "topic", "__oprtr*"]
+          - ["cluster", "*", "group", "connect-ic-sla**"]
           - ["cluster", "*", "group", "oprtr*"]
+          - ["cluster", "*", "group", "karapace*"]
+          - ["cluster", "*", "group", "KafkaConsumer*"]
+          - ["connect", "*", "connector", "ic-sla-connector*"]
     roles:
       - "kafka-admins"
       - "kafka-owners"

@@ -18,6 +18,7 @@ Usage:
 import time
 import json
 import os
+import re
 import random
 
 from kafka import KafkaProducer
@@ -25,10 +26,37 @@ from kafka.admin import KafkaAdminClient, NewTopic
 from kafka.errors import TopicAlreadyExistsError
 
 # Configuration
-BOOTSTRAP_SERVERS = os.getenv("BOOTSTRAP_SERVERS", "localhost:9092")
+BOOTSTRAP = os.getenv("BOOTSTRAP", "localhost:9092")
+SECURITY_PROTOCOL = os.getenv("SECURITY_PROTOCOL")
+SASL_MECHANISM = os.getenv("SASL_MECHANISM", "PLAIN")
+SASL_JAAS_CONFIG = os.getenv("SASL_JAAS_CONFIG", "")
 TOPIC = os.getenv("TOPIC", "orders")
 NUM_PARTITIONS = int(os.getenv("NUM_PARTITIONS", 3))
-POISON_COUNT = int(os.getenv("POISON_COUNT", 100))  # When to trigger the stall
+POISON_COUNT = int(os.getenv("POISON_COUNT", 1000))  # When to trigger the stall
+
+
+def get_kafka_kwargs():
+    """
+    Constructs the Kafka connection arguments based on environment variables.
+    Handles extraction of credentials from SASL_JAAS_CONFIG if authentication is enabled.
+    """
+    kafka_kwargs = {"bootstrap_servers": BOOTSTRAP}
+
+    if SECURITY_PROTOCOL:
+        kafka_kwargs["security_protocol"] = SECURITY_PROTOCOL
+        kafka_kwargs["sasl_mechanism"] = SASL_MECHANISM
+
+        # kafka-python doesn't parse JAAS strings automatically, so we extract the credentials manually
+        jaas_config = SASL_JAAS_CONFIG
+        if jaas_config:
+            user_match = re.search(r'username="([^"]+)"', jaas_config)
+            pass_match = re.search(r'password="([^"]+)"', jaas_config)
+
+            if user_match and pass_match:
+                kafka_kwargs["sasl_plain_username"] = user_match.group(1)
+                kafka_kwargs["sasl_plain_password"] = pass_match.group(1)
+
+    return kafka_kwargs
 
 
 # Infrastructure Setup
@@ -39,7 +67,7 @@ def ensure_topic_exists():
     """
     print(f"Checking/Creating topic '{TOPIC}' with {NUM_PARTITIONS} partitions...")
     try:
-        admin_client = KafkaAdminClient(bootstrap_servers=BOOTSTRAP_SERVERS)
+        admin_client = KafkaAdminClient(**get_kafka_kwargs())
         new_topic = NewTopic(
             name=TOPIC, num_partitions=NUM_PARTITIONS, replication_factor=1
         )
@@ -66,7 +94,7 @@ def run_producer():
     ensure_topic_exists()
 
     producer = KafkaProducer(
-        bootstrap_servers=BOOTSTRAP_SERVERS,
+        **get_kafka_kwargs(),
         key_serializer=lambda k: k.encode("utf-8"),
         value_serializer=lambda v: json.dumps(v).encode("utf-8"),
     )

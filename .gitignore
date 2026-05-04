@@ -1,5 +1,6 @@
 license.env
 .ignore
+setup.remote.env
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

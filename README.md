@@ -135,7 +135,7 @@ If you wish to see live audit alerts in your own Slack workspace during this lab
 
 **Step 2: Update Kpow Configuration**
 
-Open [`setup.env`](./resources/kpow/config/setup.env), comment out the default **Generic** provider, and uncomment the **Slack** configuration with your valid URL:
+Open [`setup.remote.env`](./setup.remote.env), comment out the default **Generic** provider, and uncomment the **Slack** configuration with your valid URL:
 
 ```bash
 # WEBHOOK_PROVIDER=generic
@@ -145,14 +145,14 @@ WEBHOOK_PROVIDER=slack
 WEBHOOK_URL=https://hooks.slack.com/services/TXXX/BXXX/XXXX
 ```
 
-Updating these variables in your `setup.env` file ensures that all administrative actions (such as topic creations, configuration edits, and ACL modifications) are routed directly to your Slack channel for real-time operational transparency.
+Updating these variables in your `setup.remote.env` file ensures that all administrative actions (such as topic creations, configuration edits, and ACL modifications) are routed directly to your Slack channel for real-time operational transparency.
 
 ### Starting the Environment and Generating Logs
 
 With your webhook configuration in place, start the Kafka environment:
 
 ```bash
-docker compose up -d
+docker compose -f compose-remote.yml --profile main up -d
 ```
 
 Once started, open the Kpow UI (http://localhost:3000), log in as `admin` (password: `password`), and create a new topic. Then, delete that same topic.
@@ -205,14 +205,14 @@ When it encounters the Poison Pill on Partition 2, the data validation fails. Be
 The provided Compose file orchestrates these scripts using the official Python Docker image.
 
 - **Replication:** It deploys 3 replicas of the consumer service to match the 3 topic partitions, creating a realistic distributed consumer group named `orders-fulfillment`.
-- **Profiles:** The services are tagged with Docker Compose profiles (`producer`, `consumer`, and `all`). This allows us to start and stop the producer and consumer independently, which is a required step when applying an offset mutation later in the lab.
+- **Profiles:** The services are tagged with Docker Compose profiles (`producer`, `consumer`, and `client`). This allows us to start and stop the producer and consumer independently, which is a required step when applying an offset mutation later in the lab.
 
 ### Start the Lab Applications
 
 Deploy the Kafka producer and consumer apps by running:
 
 ```bash
-docker compose -f resources/diagnostics/docker-compose.yml --profile all up -d
+docker compose -f compose-remote.yml --profile client up -d
 ```
 
 ### Scenario: Silent Stall
@@ -261,7 +261,7 @@ Go back to the **Consumers** menu. In the action menu for the stuck group member
 For Kpow to safely apply this offset change, the consumer group status must be _Empty_ to prevent state conflicts. Stop your consumer application instances:
 
 ```bash
-docker compose -f resources/diagnostics/docker-compose.yml --profile consumer down
+docker compose -f compose-remote.yml --profile consumer down
 ```
 
 **3. Restart Consumers**
@@ -269,7 +269,7 @@ docker compose -f resources/diagnostics/docker-compose.yml --profile consumer do
 Kpow detects that the group has stopped and automatically applies the staged mutation. Once the mutation status shows as _Succeeded_ in the Kpow UI, restart your consumer application:
 
 ```bash
-docker compose -f resources/diagnostics/docker-compose.yml --profile consumer up -d
+docker compose -f compose-remote.yml --profile consumer up -d
 ```
 
 You will see that the consumer subscribed to Partition 2 is no longer blocked and resumes processing messages. The stuck lag drains immediately, and the missing orders begin to process successfully.
@@ -281,7 +281,7 @@ You will see that the consumer subscribed to Partition 2 is no longer blocked an
 Once you have completed the lab, stop the diagnostic applications to conserve resources:
 
 ```bash
-docker compose -f resources/diagnostics/docker-compose.yml --profile all down
+docker compose -f compose-remote.yml --profile client down
 ```
 
 ---
@@ -596,8 +596,8 @@ Once you have completed the workshop, you can tear down the environment and remo
 
 ```bash
 # Stop and remove the diagnostic applications from Lab 2 (if still running)
-docker compose -f resources/diagnostics/docker-compose.yml --profile all down
+docker compose -f compose-remote.yml --profile client down
 
 # Tear down the main Kafka environment, Kpow, and associated services
-docker compose down
+docker compose -f compose-remote.yml --profile main down
 ```

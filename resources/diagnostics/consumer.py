@@ -18,15 +18,43 @@ Key Technical Behaviors:
 
 import json
 import os
+import re
 import time
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from kafka import KafkaConsumer, TopicPartition, OffsetAndMetadata
 
 # Configuration
-BOOTSTRAP_SERVERS = os.getenv("BOOTSTRAP_SERVERS", "localhost:9092")
+BOOTSTRAP = os.getenv("BOOTSTRAP", "localhost:9092")
+SECURITY_PROTOCOL = os.getenv("SECURITY_PROTOCOL")
+SASL_MECHANISM = os.getenv("SASL_MECHANISM", "PLAIN")
+SASL_JAAS_CONFIG = os.getenv("SASL_JAAS_CONFIG", "")
 TOPIC = os.getenv("TOPIC", "orders")
 GROUP_ID = os.getenv("GROUP_ID", "orders-fulfillment")
+
+
+def get_kafka_kwargs():
+    """
+    Constructs the Kafka connection arguments based on environment variables.
+    Handles extraction of credentials from SASL_JAAS_CONFIG if authentication is enabled.
+    """
+    kafka_kwargs = {"bootstrap_servers": BOOTSTRAP}
+
+    if SECURITY_PROTOCOL:
+        kafka_kwargs["security_protocol"] = SECURITY_PROTOCOL
+        kafka_kwargs["sasl_mechanism"] = SASL_MECHANISM
+
+        # kafka-python doesn't parse JAAS strings automatically, so we extract the credentials manually
+        jaas_config = SASL_JAAS_CONFIG
+        if jaas_config:
+            user_match = re.search(r'username="([^"]+)"', jaas_config)
+            pass_match = re.search(r'password="([^"]+)"', jaas_config)
+
+            if user_match and pass_match:
+                kafka_kwargs["sasl_plain_username"] = user_match.group(1)
+                kafka_kwargs["sasl_plain_password"] = pass_match.group(1)
+
+    return kafka_kwargs
 
 
 def run_consumer():
@@ -36,13 +64,13 @@ def run_consumer():
     """
     c = KafkaConsumer(
         TOPIC,
-        bootstrap_servers=BOOTSTRAP_SERVERS,
         group_id=GROUP_ID,
         auto_offset_reset="earliest",
         # CRITICAL: Disable auto-commit.
         # This ensures we don't accidentally skip the bad message
         # without explicitly being told to by an operator.
         enable_auto_commit=False,
+        **get_kafka_kwargs(),
     )
 
     print(f"Consumer started. Group: {GROUP_ID}")
