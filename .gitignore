@@ -1,6 +1,7 @@
 license.env
 .ignore
 setup.remote.env
+orders-*.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
