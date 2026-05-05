@@ -35,18 +35,27 @@ By the end of this workshop, you will have hands-on experience with:
 
 Ensure you have the following installed and configured before starting the workshop:
 
-- **Docker and Docker Compose**: This is the only technical requirement. All workshop components including Kafka brokers, Kpow, and the Python-based lab applications will be deployed as Docker containers.
+- **Docker and Docker Compose**: This is the only technical requirement. While the Kafka infrastructure is hosted on Instaclustr, Kpow and the Python-based lab applications will be deployed locally as Docker containers.
 - **Hardware**: 8GB RAM minimum (16GB recommended).
 - **Operating System**: macOS or Linux. (Windows users are recommended to use WSL2).
-- **Internet Connection**: Required for the initial download of Docker images.
+- **Internet Connection**: Required for the initial download of Docker images and connecting to the remote clusters.
+
+### Instaclustr Instances
+
+To complete the labs, you will need active managed instances running on the Instaclustr platform. If you have not already provisioned them, log into the Instaclustr Console and create the following:
+
+1. **Kafka Cluster with Karapace**: Provision an Apache Kafka cluster and ensure the Karapace Schema Registry add-on is enabled.
+2. **Kafka Connect Cluster**: Provision a dedicated Apache Kafka Connect cluster linked to your primary Kafka cluster.
+
+_Security Note: Ensure you add your local machine's IP address to the firewall rules (Allowed IPs) in the Instaclustr Console for both clusters. Without this, your local Docker containers will not be able to connect._
 
 ### Kpow Trial License
 
 This workshop uses Kpow to manage and monitor your Kafka ecosystem. You will need a free trial license to activate the platform.
 
-1.  **Generate Your License**: Visit the[Factor House Getting Started](https://account.factorhouse.io/auth/getting_started) page to generate your personal trial license.
+1.  **Generate Your License**: Visit the [Factor House Getting Started](https://account.factorhouse.io/auth/getting_started) page to generate your personal trial license.
 2.  **Create `license.env` File**:
-    - Create a new file named `license.env`.
+    - Create a new file named `license.env` in the root of your project directory.
     - Copy the license environment variables provided by Factor House and paste them into this file.
     - You can use `license.env.example` in that same directory as a reference for the correct format.
 
@@ -65,26 +74,21 @@ cd factorhouse-workshop-london-26
 
 ### Architecture and Configuration
 
-The workshop environment is entirely containerized. The `docker-compose.yml` file orchestrates a complete enterprise streaming stack featuring two independent KRaft-based Kafka clusters to demonstrate multi-cluster management and multi-tenancy.
+The workshop connects to managed Instaclustr instances (Kafka Cluster, Karapace Schema Registry, and Kafka Connect). The `compose-remote.yml` file orchestrates the local tooling required to interact with, manage, and monitor the remote cluster.
 
-The environment includes the following services:
+The local Docker environment includes the following services:
 
-- **kafka-1**: The primary Kafka broker.
-- **kafka-2**: A standalone Kafka broker acting as a secondary environment.
-- **schema**: Confluent Schema Registry secured with Basic Authentication.
-- **connect**: Kafka Connect cluster for data integration pipelines.
 - **kpow**: The central unified interface and Enterprise API for managing the ecosystem.
 - **webhook-server**: A local Python diagnostic server that captures governance events.
+- **consumer / producer**: Python diagnostic applications used to simulate data workloads for the labs.
 
 ### Kpow Configuration Structure
 
-To simulate an enterprise environment, Kpow is configured with strict security and governance parameters. These configurations are stored in the `resources/` directory:
+To simulate a mature enterprise environment, Kpow is configured with strict security and governance parameters connecting to the Instaclustr infrastructure. These configurations are organized as follows:
 
 ```text
 resources/
 ├── kpow
-│   ├── config
-│   │   └── setup.env
 │   ├── jaas
 │   │   ├── hash-jaas.conf
 │   │   └── hash-realm.properties
@@ -93,15 +97,67 @@ resources/
 │   └── schema
 │       ├── schema_jaas.conf
 │       └── schema_realm.properties
-└── docker-compose.yml
+├── setup.remote.env
+├── setup.remote.env.example
+└── compose-remote.yml
 ```
 
 **Configuration Breakdown:**
 
-- **`config/setup.env`**: The central environment file. It configures Kpow to connect to both Kafka clusters, Kafka Connect, and the Schema Registry. It also enables the Enterprise API and configures webhook routing for Lab 1.
+- **`setup.remote.env`**: The central environment file. You will copy the provided `setup.remote.env.example` to create this file and populate it with your Instaclustr connection details (_see below_). It configures Kpow to securely connect to the remote Kafka cluster via SASL/SCRAM, Kafka Connect, and the Karapace Schema Registry. It also enables the Enterprise API and configures webhook routing.
 - **`jaas/`**: Handles Authentication. The `hash-realm.properties` file defines the four distinct user personas we will use in the workshop: `admin`, `owner`, `editor`, and `reader`.
 - **`rbac/`**: Handles Authorization. The `hash-rbac.yml` file defines our Role-Based Access Control policies, mapping the user personas to specific permissions and isolating tenant resources.
-- **`schema/`**: Contains the JAAS configuration to secure the Schema Registry with Basic Authentication.
+- **`schema/`**: Contains the JAAS configuration required to secure the Schema Registry connection.
+
+### Connecting to Instaclustr
+
+Before starting the labs, you must copy the template file to create your active environment configuration and fill in the missing connection details for your managed Instaclustr environment.
+
+```bash
+cp setup.remote.env.example setup.remote.env
+```
+
+<details>
+<summary><strong>View <code>setup.remote.env.example</code> contents</strong></summary>
+
+```bash
+###############################################################################
+# Kpow Enterprise Setup Configuration
+###############################################################################
+
+...
+
+# Kafka Environment 1
+# Primary cluster containing Schema Registry and Kafka Connect.
+ENVIRONMENT_NAME=Instaclustr Kafka
+CLUSTER_ID=cluster-1
+BOOTSTRAP=<KAFKA-IP1>:9092,<KAFKA-IP2>:9092,<KAFKA-IP3>:9092
+SECURITY_PROTOCOL=SASL_PLAINTEXT
+SASL_MECHANISM=SCRAM-SHA-256
+SASL_JAAS_CONFIG=org.apache.kafka.common.security.scram.ScramLoginModule required username="<KAFKA_USERNAME>" password="<KAFKA_PASSWORD>";
+
+# Integration: Kafka Connect
+CONNECT_NAME=Instaclustr Connect
+CONNECT_REST_URL=https://<KAFKA-CONNECT-IP1>:8083
+CONNECT_PERMISSIVE_SSL=true
+CONNECT_AUTH=BASIC
+CONNECT_BASIC_AUTH_USER=<KAFKA_CONNECT_USERNAME>
+CONNECT_BASIC_AUTH_PASS=<KAFKA_CONNECT_PASSWORD>
+
+# Integration: Schema Registry
+SCHEMA_REGISTRY_NAME=Karapace Registry
+SCHEMA_REGISTRY_URL=https://<REGISTRY_URL_WITH_AN_ASSOCIATED_CA_SIGNED_CERTIFICATE>:8085
+SCHEMA_REGISTRY_AUTH=USER_INFO
+SCHEMA_REGISTRY_USER=<SCHEMA_REGISTRY_USERNAME>
+SCHEMA_REGISTRY_PASSWORD=<SCHEMA_REGISTRY_PASSWORD>
+
+...
+```
+
+</details>
+<br/>
+
+Open `setup.remote.env` in your text editor and replace the placeholder values (e.g., `<KAFKA-IP1>`, `<KAFKA_USERNAME>`, `<KAFKA_PASSWORD>`, etc.) with the connection credentials obtained from the Instaclustr console.
 
 ---
 
@@ -111,7 +167,32 @@ Operating critical data infrastructure requires an immutable record of administr
 
 ### Webhook Configuration
 
-In this lab, Kpow is configured to route audit logs to a webhook. This configuration is managed within the [`setup.env`](./resources/kpow/config/setup.env) file.
+In this lab, Kpow is configured to route audit logs to a webhook. This configuration is managed within the [`setup.remote.env`](./setup.remote.env) file.
+
+<details>
+<summary><strong>View webhook configuration</strong></summary>
+
+```bash
+# Webhook (Lab 2)
+# Verbosity options:
+#   MUTATIONS (Default) - Only state-changing actions (topic creation, etc)
+#   QUERIES - Only data inspections
+#   ALL - Everything
+WEBHOOK_VERBOSITY=MUTATIONS
+
+# [Option A] Generic Webhook (Default for Lab 2)
+# Routes audit logs to the local Python diagnostic server.
+WEBHOOK_PROVIDER=generic
+WEBHOOK_URL=http://webhook-server:9000
+
+# [Option B] Slack Webhook (Optional Advanced Path)
+# To use Slack, comment out Option A above and uncomment the lines below:
+# WEBHOOK_PROVIDER=slack
+# WEBHOOK_URL=https://hooks.slack.com/services/TXXX/BXXX/XXXX
+```
+
+</details>
+<br/>
 
 Choose one of the following two paths:
 
@@ -127,7 +208,7 @@ If you wish to see live audit alerts in your own Slack workspace during this lab
 
 **Step 1: Configure the Slack App and Webhook**
 
-1. **Create a Slack app**: Navigate to the[Slack API website](https://api.slack.com/apps) and click on "Create New App". Choose to create it "From scratch".
+1. **Create a Slack app**: Navigate to the [Slack API website](https://api.slack.com/apps) and click on "Create New App". Choose to create it "From scratch".
 2. **Name your app and choose a workspace**: Provide a name for your application and select the Slack workspace where you want to post messages.
 3. **Enable incoming webhooks**: In your app settings page, go to "Incoming Webhooks" under the "Features" section. Toggle the feature on and then click "Add New Webhook to Workspace".
 4. **Select a channel**: Choose the channel where you want the Kpow notifications to be posted and click "Allow".
@@ -145,7 +226,7 @@ WEBHOOK_PROVIDER=slack
 WEBHOOK_URL=https://hooks.slack.com/services/TXXX/BXXX/XXXX
 ```
 
-Updating these variables in your `setup.remote.env` file ensures that all administrative actions (such as topic creations, configuration edits, and ACL modifications) are routed directly to your Slack channel for real-time operational transparency.
+Updating these variables in your [`setup.remote.env`](./setup.remote.env) file ensures that all administrative actions (such as topic creations, configuration edits, and ACL modifications) are routed directly to your Slack channel for real-time operational transparency.
 
 ### Starting the Environment and Generating Logs
 
@@ -155,7 +236,7 @@ With your webhook configuration in place, start the Kafka environment:
 docker compose -f compose-remote.yml --profile main up -d
 ```
 
-Once started, open the Kpow UI (http://localhost:3000), log in as `admin` (password: `password`), and create a new topic. Then, delete that same topic.
+Once started, open the Kpow UI (http://localhost:3000), log in as `owner` (password: `password`), and create a new topic. Then, delete that same topic.
 
 The corresponding audit logs will immediately appear in the webhook server log (if using the generic option) or in your designated Slack channel (if using the Slack option).
 
@@ -186,7 +267,6 @@ The diagnostic lab uses a custom Python-based Kafka producer and a distributed c
 ```text
 resources/diagnostics/
 ├── consumer.py
-├── docker-compose.yml
 └── producer.py
 ```
 
@@ -196,20 +276,20 @@ The producer script automatically creates an `orders` topic with 3 partitions. I
 
 **2. Consumer ([`consumer.py`](./resources/diagnostics/consumer.py))**
 
-The consumer simulates a strict financial application. It expects the `amount` field to be parseable as a Decimal. Crucially, the consumer is configured with `"enable.auto.commit": False`.
+The consumer simulates a strict financial application. It expects the `amount` field to be parseable as a Decimal. Crucially, the consumer is configured with `"enable_auto_commit": False`.
 
 When it encounters the Poison Pill on Partition 2, the data validation fails. Because auto-commit is disabled, the application does not simply skip the message. Instead, it enters an infinite retry loop. It logs a failure, seeks back to the exact same failed offset, and tries again. Because it continues to poll the broker during this loop, it sends regular heartbeats. The broker believes the consumer is perfectly healthy, but logically, it is completely stuck.
 
-**3. Deployment ([`docker-compose.yml`](./resources/diagnostics/docker-compose.yml))**
+**3. Deployment ([`compose-remote.yml`](./compose-remote.yml))**
 
-The provided Compose file orchestrates these scripts using the official Python Docker image.
+The main Compose file orchestrates these scripts using the official Python Docker image and securely passes your Instaclustr credentials via the `setup.remote.env` file.
 
 - **Replication:** It deploys 3 replicas of the consumer service to match the 3 topic partitions, creating a realistic distributed consumer group named `orders-fulfillment`.
-- **Profiles:** The services are tagged with Docker Compose profiles (`producer`, `consumer`, and `client`). This allows us to start and stop the producer and consumer independently, which is a required step when applying an offset mutation later in the lab.
+- **Profiles:** The services are tagged with Docker Compose profiles (`producer`, `consumer`, and `client`). This allows us to start and stop the diagnostic applications independently from the main Kpow infrastructure, which is a required step when applying an offset mutation later in the lab.
 
 ### Start the Lab Applications
 
-Deploy the Kafka producer and consumer apps by running:
+Deploy the Kafka producer and consumer apps by running the `client` profile:
 
 ```bash
 docker compose -f compose-remote.yml --profile client up -d
@@ -346,24 +426,34 @@ Once approved, the topic is successfully created on the Kafka cluster.
 
 ![](./images/lab3-04-topic-created.png)
 
+---
+
 ## Lab 4: Kafka Connect Management
 
 Explore how to deploy and manage data pipelines using both the Kpow UI and its Enterprise API. We will walk through configuring a source connector via the UI to generate mock data, and deploying another instance of the connector via the API. You will learn how to monitor running tasks, verify the data flow, and properly clean up the connectors.
 
+❗ **Firewall Requirements for Kafka Connect**
+
+- **Manual Update Required:** Linking Kafka Connect to a Kafka cluster automatically updates the broker's firewall, but it does _not_ update the Karapace firewall. You must update Karapace manually!
+- **Public Routing Trap:** Pointing Kafka Connect to a public Karapace endpoint (`cnodes.io:8085`) routes traffic over the public internet.
+- **Fix:** You must explicitly add the **Public IPs** of your Kafka Connect nodes to the Karapace allowed list. Using Private IPs (`10.1.x.x`) will block traffic and cause timeout errors!
+
 ### Connector Configuration
 
-In this lab, we use a pre-built configuration file to generate mock order data. The configuration files are located in the `resources` directory:
+In this lab, we use a JSON configuration file to instruct Kafka Connect to generate mock order data. Because our environment connects to remote Instaclustr instances with specific URLs and credentials, we will use a helper script to dynamically generate these files.
 
-```text
-resources/connector/config/
-├── orders-api.json
-└── orders-ui.json
+Run the following command to generate the connector configurations based on the credentials stored in your environment file:
+
+```bash
+./connect-config.sh setup.remote.env
 ```
 
-Let's look at the key components of `orders-ui.json`:
+This script reads your Karapace details and creates two files in your current directory: `orders-ui.json` and `orders-api.json`.
+
+Let's look at the key components of the generated `orders-ui.json`:
 
 - **Connector Class**: It uses `com.amazonaws.mskdatagen.GeneratorSourceConnector` to generate continuous mock data.
-- **Converters**: The key is a simple String, while the value uses the `AvroConverter`. Notice how it connects directly to our secured Schema Registry (`http://schema:8081`) using Basic Auth credentials (`admin:admin`).
+- **Converters**: The key is a simple String, while the value uses the `AvroConverter`. Notice how the script automatically injected your secured Karapace Schema Registry URL and Basic Auth credentials into the `value.converter` properties.
 - **Data Generation**: The `genv.*` fields define the schema and mock data rules (e.g., generating random UUIDs, realistic prices, and names).
 - **Single Message Transforms (SMTs)**: The `transforms` block shapes the data in flight. It extracts the `order_id` to use as the Kafka message key, converts the `bid_time` string into a proper Timestamp, and applies a custom transform (`UnwrapUnionTransform`) included in our plugin directory.
 
@@ -379,7 +469,7 @@ Kafka Connect pipelines can be deployed manually via the UI or programmatically 
 
 ![](./images/lab5-create-connector-02.png)
 
-3\. Import the source connector configuration file ([`./resources/connector/config/orders-ui.json`](./resources/connector/config/orders-ui.json)) and click **Create**.
+3\. Import the dynamically generated source connector configuration file ([`orders-ui.json`](./orders-ui.json)) and click **Create**.
 
 ![](./images/lab5-create-connector-03.png)
 
@@ -416,8 +506,8 @@ curl -s -H "$AUTH_HEADER" -H "$TENANT_HEADER" \
 {
   "clusters": [
     {
-      "id": "connect-connect1-C8T4oQvDRm-yA8R-q_zJww",
-      "label": "Local Connect Cluster",
+      "id": "connect-connect1-uDKtTfIPTzSGMZKZpv6kyg",
+      "label": "Instaclustr Connect",
       "type": "apache_connect"
     }
   ],
@@ -433,15 +523,16 @@ curl -s -H "$AUTH_HEADER" -H "$TENANT_HEADER" \
 
 3\. **Create the Connector**
 
-Now, make a POST request using the `orders-api.json` configuration file. Replace the `CONNECT_ID` below with the ID returned in the previous step.
+Now, make a POST request using the [`orders-api.json`](./orders-api.json) configuration file. Replace the `CONNECT_ID` below with the ID returned in the previous step.
 
 ```bash
-CONNECT_ID="connect-connect1-C8T4oQvDRm-yA8R-q_zJww"
+# Replace to a valid connect ID
+CONNECT_ID="connect-connect1-uDKtTfIPTzSGMZKZpv6kyg"
 
 curl -s -i -X POST -H "$AUTH_HEADER" -H "$TENANT_HEADER" \
   -H "Accept:application/json" -H  "Content-Type:application/json" \
   http://localhost:3001/connect/v1/apache/$CONNECT_ID/connectors \
-  -d @resources/connector/config/orders-api.json
+  -d @orders-api.json
 ```
 
 <details>
@@ -451,10 +542,10 @@ curl -s -i -X POST -H "$AUTH_HEADER" -H "$TENANT_HEADER" \
 {
   "name": "orders-api",
   "metadata": {
-    "response_id": "2ad68a8d-cdd0-40db-86a3-1880977230c7",
+    "response_id": "d1eb3eab-39a3-4732-b32d-95939a6b9108",
     "cluster_id": "cluster-1",
     "is_staged": false,
-    "connect_id": "connect-connect1-C8T4oQvDRm-yA8R-q_zJww",
+    "connect_id": "connect-connect1-uDKtTfIPTzSGMZKZpv6kyg",
     "tenant_id": "AppTeam"
   }
 }
@@ -481,23 +572,23 @@ curl -s -H "$AUTH_HEADER" -H "$TENANT_HEADER" \
   "name": "orders-api",
   "type": "source",
   "state": "RUNNING",
-  "worker_id": "localhost:8083",
+  "worker_id": "10.1.99.150:8083",
   "class": "com.amazonaws.mskdatagen.GeneratorSourceConnector",
   "topics": [],
   "tasks": [
     {
       "id": 0,
       "state": "RUNNING",
-      "worker_id": "localhost:8083"
+      "worker_id": "10.1.99.150:8083"
     },
     {
       "id": 1,
       "state": "RUNNING",
-      "worker_id": "localhost:8083"
+      "worker_id": "10.1.99.150:8083"
     }
   ],
   "metadata": {
-    "connect_id": "connect-connect1-C8T4oQvDRm-yA8R-q_zJww",
+    "connect_id": "connect-connect1-uDKtTfIPTzSGMZKZpv6kyg",
     "tenant_id": "AppTeam"
   }
 }
@@ -522,10 +613,10 @@ curl -X DELETE -H "$AUTH_HEADER" -H "$TENANT_HEADER" \
 ```json
 {
   "metadata": {
-    "response_id": "b3535d85-c0c2-4490-acd3-e3f2a5c3cc03",
+    "response_id": "9774abdc-51fe-4530-8b2a-f1d48c997884",
     "cluster_id": "cluster-1",
     "is_staged": false,
-    "connect_id": "connect-connect1-C8T4oQvDRm-yA8R-q_zJww",
+    "connect_id": "connect-connect1-uDKtTfIPTzSGMZKZpv6kyg",
     "tenant_id": "AppTeam"
   }
 }
@@ -543,7 +634,7 @@ Kpow bypasses raw JMX to automatically calculate actionable, business-level metr
 
 ### Enable Prometheus Egress
 
-To expose the metrics endpoints, append the following environment variable to your [`setup.env`](./resources/kpow/config/setup.env) file:
+To expose the metrics endpoints, append the following environment variable to your [`setup.remote.env`](./setup.remote.env) file:
 
 ```bash
 PROMETHEUS_EGRESS=true
