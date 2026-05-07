@@ -40,14 +40,106 @@ Ensure you have the following installed and configured before starting the works
 - **Operating System**: macOS or Linux. (Windows users are recommended to use WSL2).
 - **Internet Connection**: Required for the initial download of Docker images and connecting to the remote clusters.
 
-### Instaclustr Instances
+### Instaclustr Setup Instructions
 
-To complete the labs, you will need active managed instances running on the Instaclustr platform. If you have not already provisioned them, log into the Instaclustr Console and create the following:
+For this workshop, a special Instaclustr account has been provisioned with advanced permissions to support Kafka Connect Custom Connectors. This experience differs slightly from the default free trial.
 
-1. **Kafka Cluster with Karapace**: Provision an Apache Kafka cluster and ensure the Karapace Schema Registry add-on is enabled.
-2. **Kafka Connect Cluster**: Provision a dedicated Apache Kafka Connect cluster linked to your primary Kafka cluster.
+Please follow the steps below carefully to set up your environment.
 
-_Security Note: Ensure you add your local machine's IP address to the firewall rules (Allowed IPs) in the Instaclustr Console for both clusters. Without this, your local Docker containers will not be able to connect._
+**1\. Account Access & Rules of Engagement**
+
+1. **Accept the Invitation**: You will receive an email titled _Instaclustr Account Invitation_ from `system@instaclustr.com`. Click the **Accept This Invitation** button in the email to join the workshop account.
+2. **Shared Environment**: This is a shared account. You will see clusters created by other workshop participants in the console.
+3. **Naming Convention**: To avoid confusion, you must prefix all your resources with your name (e.g., `your-name-kafka`). **Only interact with your own clusters during the workshop.**
+
+**2\. Provisioning the Kafka Cluster**
+
+You must create the Kafka cluster _before_ the Kafka Connect cluster.
+
+1. Create a new Kafka cluster and name it: `your-name-kafka`
+2. Under **Enterprise Add-Ons**, select **Schema Registry** (Karapace).
+3. Under **Kafka Setup**, ensure you add your current IP address to the allowed list.
+4. Under **Data Centre Options**, you must configure the **Data Centre Network** to prevent CIDR overlapping with other participants:
+   - ⚠️ **Important:** Please enter the unique CIDR block (e.g., `10.1.0.0/16`) written on the Post-it note provided at your seat. Every cluster requires a different network range.
+
+**3\. Provisioning the Kafka Connect Cluster**
+
+Once your Kafka cluster is provisioning, create the Connect cluster.
+
+1. Create a new Kafka Connect cluster and name it: `your-name-kafka-connect`
+2. Set the **Target Kafka Cluster** to the one you just created (`your-name-kafka`).
+3. Under **Kafka Connect Options**:
+   - Add your current IP address to the allowed list.
+   - Enable **Use Custom Connectors**.
+4. You will be prompted to provide S3 bucket details for the custom AWS Datagen connector. Enter the following exact values:
+   - **S3 Bucket Name**: `instaclustr-workshops-custom-connector-storage-bucket`
+   - **Access Key**: `<WILL-BE-INFORMED>`
+   - **Secret Key**: `<WILL-BE-INFORMED>`
+
+**4\. Verification and Firewall Configuration**
+
+Wait for your Kafka Connect cluster to reach a **Running** state, then complete the following steps to ensure schemas can be registered successfully.
+
+**Sync the Custom Connector:**
+
+1. Navigate to your Kafka Connect cluster.
+2. Go to **Connectors** -> **Managing your connectors**.
+3. Click the **Sync** button.
+4. Verify that the AWS Datagen connector appears under _Available Connectors_ exactly as:
+   `com.amazonaws.mskdatagen.GeneratorSourceConnector`
+
+**Update the Karapace Firewall**
+
+_Because your Kafka Connect nodes will route traffic to the Schema Registry over the public internet, you must explicitly allow their Public IPs._
+
+1. In your **Kafka Connect** cluster, go to the **Connection Info** tab and copy the **Public IP addresses** of all your Connect nodes. (Also copy your Connect username and password for later).
+2. Navigate back to your **Kafka Cluster**.
+3. Go to the **Firewall Rules** section.
+4. Add the Public IPs of your Kafka Connect cluster to the **Karapace Schema Registry Allowed Addresses** and click **Save**.
+
+**5\. Collect Connection Details**
+
+To run the workshop labs, you need to populate your local `setup.remote.env` file. Gather the following details from the Instaclustr console to update your environment variables:
+
+**From your Kafka Cluster (Connection Info tab):**
+
+- **Public IPs** of your Kafka brokers.
+- **Kafka username and password**.
+
+_Environment mapping:_
+
+```bash
+BOOTSTRAP=<KAFKA-IP1>:9092,<KAFKA-IP2>:9092,<KAFKA-IP3>:9092
+SASL_JAAS_CONFIG=org.apache.kafka.common.security.scram.ScramLoginModule required username="<KAFKA_USERNAME>" password="<KAFKA_PASSWORD>";
+```
+
+**From your Kafka Cluster (Karapace Schema Registry tab):**
+
+- **Schema Registry URL** (e.g., `https://karapace-schema.xxx.cnodes.io:8085`).
+- **Schema Registry username and password**.
+
+_Environment mapping:_
+
+```bash
+SCHEMA_REGISTRY_URL=https://<REGISTRY_URL_WITH_AN_ASSOCIATED_CA_SIGNED_CERTIFICATE>:8085
+SCHEMA_REGISTRY_USER=<SCHEMA_REGISTRY_USERNAME>
+SCHEMA_REGISTRY_PASSWORD=<SCHEMA_REGISTRY_PASSWORD>
+```
+
+**From your Kafka Connect Cluster (Connection Info tab):**
+
+- **Kafka Connect Public IP** (e.g., `3.19.204.3`).
+- **Kafka Connect username and password**.
+
+_Environment mapping:_
+
+```bash
+CONNECT_REST_URL=https://<KAFKA-CONNECT-IP1>:8083
+CONNECT_BASIC_AUTH_USER=<KAFKA_CONNECT_USERNAME>
+CONNECT_BASIC_AUTH_PASS=<KAFKA_CONNECT_PASSWORD>
+```
+
+---
 
 ### Kpow Trial License
 
