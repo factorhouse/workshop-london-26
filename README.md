@@ -35,7 +35,8 @@ By the end of this workshop, you will have hands-on experience with:
 
 Ensure you have the following installed and configured before starting the workshop:
 
-- **Docker and Docker Compose**: This is the only technical requirement. While the Kafka infrastructure is hosted on Instaclustr, Kpow and the Python-based lab applications will be deployed locally as Docker containers.
+- **Instaclustr Account**: Register for a free account at [Instaclustr](https://www.instaclustr.com/). Prior to the workshop, you will receive an email invitation to join the shared workshop account using your registered email address.
+- **Docker and Docker Compose**: This is the only local technical requirement. While the Kafka infrastructure is hosted on Instaclustr, Kpow and the Python-based lab applications will be deployed locally as Docker containers.
 - **Hardware**: 8GB RAM minimum (16GB recommended).
 - **Operating System**: macOS or Linux. (Windows users are recommended to use WSL2).
 - **Internet Connection**: Required for the initial download of Docker images and connecting to the remote clusters.
