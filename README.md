@@ -86,7 +86,6 @@ Once the JAR is uploaded and your Kafka cluster has been provisioned, create the
    - **Secret Key**: `<YOUR_AWS_SECRET_KEY>`
 
 </details>
-<br/>
 
 **Verification and Firewall Configuration**
 
@@ -100,7 +99,7 @@ Ensure your Kafka and Kafka Connect clusters have reached a **Running** state, t
    `com.amazonaws.mskdatagen.GeneratorSourceConnector`
 4. If it is **not** listed, click the **Sync** button to load the custom connector.
 
-**2\.Update Firewall Rules:**
+**1\.Update Firewall Rules:**
 
 1. **Allow your local machine**: To allow Kpow and your local lab scripts to interact with the managed infrastructure, you must add your laptop's public IP address to the firewall rules for the **Kafka Cluster**, **Karapace Schema Registry**, and **Kafka Connect Cluster**.
 2. **Verify internal Kafka connectivity**: Navigate to your **Kafka Cluster** -> **Firewall Rules** section. Verify that the Private IP addresses of your Kafka Connect instances have been automatically added to the **Kafka Allowed Addresses**.
