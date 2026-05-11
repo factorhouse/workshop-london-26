@@ -94,7 +94,7 @@ Ensure your Kafka and Kafka Connect clusters have reached a **Running** state, t
 **1\. Sync the Custom Connector:**
 
 1. Navigate to your Kafka Connect cluster.
-2. Go to **Connectors** -> **Managing your connectors**.
+2. Go to **Connectors** -> **Managing Custom Connectors**.
 3. Check if the AWS Datagen connector appears under _Available Connectors_ exactly as:
    `com.amazonaws.mskdatagen.GeneratorSourceConnector`
 4. If it is **not** listed, click the **Sync** button to load the custom connector.
