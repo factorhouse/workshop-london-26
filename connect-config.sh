@@ -37,7 +37,7 @@ generate_json() {
   "name": "${topic_name}",
   "config": {
     "connector.class": "com.amazonaws.mskdatagen.GeneratorSourceConnector",
-    "tasks.max": "2",
+    "tasks.max": "3",
 
     "key.converter": "org.apache.kafka.connect.storage.StringConverter",
     "key.converter.schemas.enable": false,
