@@ -70,7 +70,7 @@ You must create the Kafka cluster _before_ the Kafka Connect cluster.
 Before creating the Kafka Connect cluster, you must host the custom connector in your own AWS environment:
 
 1. Create an S3 bucket in your AWS account.
-2. Upload the provided data generator JAR file ([`msk-data-generator.jar`](./resources/connector/jars/msk-datagen/msk-data-generator.jar)) to this bucket.
+2. Upload the provided data generator JAR file ([`msk-data-generator-0.4-jar-with-dependencies.jar`](./resources/connector/jars/msk-datagen/msk-data-generator-0.4-jar-with-dependencies.jar)) to this bucket.
 3. Prepare an AWS Access Key and Secret Key that has read access to this bucket.
 
 Once the JAR is uploaded and your Kafka cluster has been provisioned, create the Connect cluster:
@@ -630,7 +630,8 @@ Now, make a POST request using the [`orders-api.json`](./orders-api.json) config
 
 ```bash
 # Replace to a valid connect ID
-CONNECT_ID="connect-connect1-uDKtTfIPTzSGMZKZpv6kyg"
+# e.g., CONNECT_ID="connect-connect1-FDkKOoIUT9u8rxBsfd9-sw"
+CONNECT_ID="<Connect-Cluster-Id>"
 
 curl -s -i -X POST -H "$AUTH_HEADER" -H "$TENANT_HEADER" \
   -H "Accept:application/json" -H  "Content-Type:application/json" \
