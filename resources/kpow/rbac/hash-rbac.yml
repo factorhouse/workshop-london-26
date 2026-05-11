@@ -20,6 +20,7 @@ tenants:
           - ["cluster", "*", "topic", "oprtr*"]
           - ["cluster", "*", "topic", "instaclustr*"]
           - ["cluster", "*", "topic", "__oprtr*"]
+          - ["cluster", "*", "topic", "fh-local-connect*"]
           - ["cluster", "*", "group", "connect-ic-sla**"]
           - ["cluster", "*", "group", "oprtr*"]
           - ["cluster", "*", "group", "karapace*"]

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# 1. Validate arguments
+# Validate arguments
 if [ -z "$1" ]; then
   echo "Usage: $0 <path-to-env-file>"
   echo "Example: $0 ./setup.remote.env"
@@ -14,7 +14,15 @@ if [ ! -f "$ENV_FILE" ]; then
   exit 1
 fi
 
-# 2. Extract variables safely using grep and cut (removes potential quotes too)
+# Determine tasks.max based on file name
+ENV_BASENAME=$(basename "$ENV_FILE")
+TASKS_MAX=3
+
+if [ "$ENV_BASENAME" = "setup.local.env" ]; then
+  TASKS_MAX=1
+fi
+
+# Extract variables safely using grep and cut (removes potential quotes too)
 SR_URL=$(grep "^SCHEMA_REGISTRY_URL=" "$ENV_FILE" | cut -d'=' -f2- | tr -d '"' | tr -d "'")
 SR_USER=$(grep "^SCHEMA_REGISTRY_USER=" "$ENV_FILE" | cut -d'=' -f2- | tr -d '"' | tr -d "'")
 SR_PASS=$(grep "^SCHEMA_REGISTRY_PASSWORD=" "$ENV_FILE" | cut -d'=' -f2- | tr -d '"' | tr -d "'")
@@ -25,7 +33,7 @@ if [ -z "$SR_URL" ] || [ -z "$SR_USER" ] ||[ -z "$SR_PASS" ]; then
   exit 1
 fi
 
-# 3. Define a function to generate the JSON template
+# Define a function to generate the JSON template
 generate_json() {
   local type=$1
   local topic_name="orders-${type}"
@@ -37,7 +45,7 @@ generate_json() {
   "name": "${topic_name}",
   "config": {
     "connector.class": "com.amazonaws.mskdatagen.GeneratorSourceConnector",
-    "tasks.max": "3",
+    "tasks.max": "${TASKS_MAX}",
 
     "key.converter": "org.apache.kafka.connect.storage.StringConverter",
     "key.converter.schemas.enable": false,
@@ -62,6 +70,6 @@ EOF
   echo "✅ Successfully created $filename"
 }
 
-# 4. Generate the two files
+# Generate the two files
 generate_json "ui"
 generate_json "api"
