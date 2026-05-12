@@ -429,6 +429,19 @@ Wait a moment while the producer sends data. Eventually, it will inject the malf
 
 ![](./images/lab2-01-inspect.png)
 
+<details>
+<summary><strong>💡 The message can be reproduced after correcting the values.</strong></summary>
+
+1\. Select **Produce** from the drop-down menu.
+
+![](./images/lab2-extra-produce-01.png)
+
+2\. Reproduce the message after correcting the values.
+
+![](./images/lab2-extra-produce-02.png)
+
+</details>
+
 ### Resolving the Incident via Staged Mutation
 
 Now that the poison pill is identified, we need to unblock the partition by forcing the consumer to skip over the bad message.
