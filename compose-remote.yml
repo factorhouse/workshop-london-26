@@ -1,6 +1,6 @@
 services:
   kpow:
-    image: factorhouse/kpow:latest
+    image: factorhouse/kpow:95.5
     container_name: kpow
     pull_policy: always
     restart: always
