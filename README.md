@@ -62,8 +62,11 @@ If you are setting up an environment outside of this workshop or want to underst
 You must create the Kafka cluster _before_ the Kafka Connect cluster.
 
 1. Create a new Kafka cluster and name it: `your-name-kafka`
-2. Under **Enterprise Add-Ons**, select **Schema Registry** (Karapace).
-3. Under **Kafka Setup**, ensure you add your current IP address to the allowed list.
+2. Select **Application Selection** `Apache Kafka`, **Providor selection** `Amazon Web Services`, then click Next
+2. In **Kafka Setup**, ensure you add your current IP address to the allowed list.
+2. In **Enterprise Add-Ons**, select **Schema Registry** (Once you select it, you will see which version of Karapace it is), then click Next.
+2. You'll get to a Data Centre Options page, all you have to do is click Next.
+2. Then you get to a final **Apache Kafka** page where you need to accept the terms of service and submit
 
 **3\. Provisioning the Kafka Connect Cluster**
 
@@ -76,24 +79,27 @@ Before creating the Kafka Connect cluster, you must host the custom connector in
 Once the JAR is uploaded and your Kafka cluster has been provisioned, create the Connect cluster:
 
 1. Create a new Kafka Connect cluster and name it: `your-name-kafka-connect`
-2. Set the **Target Kafka Cluster** to the one you just created (`your-name-kafka`).
-3. Under **Kafka Connect Options**:
+2. Select **Application Selection** `Apache Kafka`, **Providor selection** `Amazon Web Services`, then click Next
+2. You'll be on the Kafka Connect Setup page. Set the **Kafka Cluster Name** to the one you just created (`your-name-kafka`). (It may take a few minutes for the new cluster to appear. If it doesn't appear, start the create new kafka connect cluster over again)
+2. Under **Kafka Connect Options**:
    - Add your current IP address to the allowed list.
    - Enable **Use Custom Connectors**.
-4. You will be prompted to provide S3 bucket details for the custom connector. Enter the values you prepared above:
+2. You will be prompted to provide S3 bucket details for the custom connector. Enter the values you prepared above, once they are in click next:
    - **S3 Bucket Name**: `<YOUR_S3_BUCKET_NAME>`
    - **Access Key**: `<YOUR_AWS_ACCESS_KEY>`
    - **Secret Key**: `<YOUR_AWS_SECRET_KEY>`
+2. You'll be on a Data Centre Options page, all you have to do is click Next
+2. Finally, you need to accept the terms of service again and create the cluster
 
 </details>
 
 **Verification and Firewall Configuration**
 
-Ensure your Kafka and Kafka Connect clusters have reached a **Running** state, then complete the following steps to verify the custom connector is available and to configure network access.
+Ensure your Kafka and Kafka Connect clusters (the ones with your name at the start) have reached a **Running** state by clicking on Details on the side bar in each one and looking for 'Provisioning status', then complete the following steps to verify the custom connector is available and to configure network access.
 
 **1\. Sync the Custom Connector:**
 
-1. Navigate to your Kafka Connect cluster.
+1. Navigate to your Kafka Connect cluster (`your-name-kafka-connect`).
 2. Go to **Connectors** -> **Managing your connectors**.
 3. Check if the AWS Datagen connector appears under _Available Connectors_ exactly as:
    `com.amazonaws.mskdatagen.GeneratorSourceConnector`
@@ -112,7 +118,7 @@ Ensure your Kafka and Kafka Connect clusters have reached a **Running** state, t
 
 To run the workshop labs, you need to populate your local `setup.remote.env` file. Gather the following details from the Instaclustr console to update your environment variables:
 
-**From your Kafka Cluster (Connection Info tab):**
+**From your Kafka Cluster (Connection Info tab - Notice at the top that you are in the Apache Kafka section):**
 
 - **Public IPs** of your Kafka brokers.
 - **Kafka username and password**.
@@ -124,7 +130,7 @@ BOOTSTRAP=<KAFKA-IP1>:9092,<KAFKA-IP2>:9092,<KAFKA-IP3>:9092
 SASL_JAAS_CONFIG=org.apache.kafka.common.security.scram.ScramLoginModule required username="<KAFKA_USERNAME>" password="<KAFKA_PASSWORD>";
 ```
 
-**From your Kafka Cluster (Karapace Schema Registry tab):**
+**From your Kafka Cluster (Connection Info tab - You are still in Connection Info, but look for Karapace Schema Registry section at the top):**
 
 - **Schema Registry URL** (e.g., `https://karapace-schema.xxx.cnodes.io:8085`).
 - **Schema Registry username and password**.
@@ -411,20 +417,20 @@ Wait a moment while the producer sends data. Eventually, it will inject the malf
 **1. Inspect Topic Health**
 
 - Navigate to the **Topics** menu in Kpow.
-- Select the `orders` topic and view the **Overview** tab. At first glance, the aggregate data looks healthy because the majority of partitions are still processing traffic.
-- Switch to the **Details** tab and look at the Topic Partitions table. Here, the discrepancy is obvious. In Partition 2, messages are continuously being written, but the read rate is zero. Traffic is entering the partition, but nothing is leaving.
+- In the **Overview** tab click on 'Filter topic' dropdown and choose the `orders` topic. At first glance, the Summary data looks healthy because the majority of partitions are still processing traffic.
+- Switch to the **Details** tab and look at the Topic Partitions table. Here, the discrepancy is obvious. For Partition 2, you can see messages in the Write/s (writes per second) column but the Read/s rate is zero. Traffic is entering the partition, but nothing is leaving.
 
 **2. Identify Stuck Consumer**
 
-- Navigate to the **Consumers** menu and select the `orders-fulfillment` consumer group.
-- In the **Overview** tab, you can spot the issue immediately. The total consumer lag is increasing, yet no idle members are detected and messages continue to be consumed on other partitions.
-- Switch to the **Details** tab for a granular view. You can see that one specific group member is stuck on a particular offset. The lag for that partition is accumulating rapidly.
+- Navigate to the **Consumers** menu click on 'Filter group' and choose the `orders-fulfillment` consumer group.
+- In the **Overview** tab, you can spot the issue immediately. In the Summary table 'Total lag' is steadily increasing, yet 'Idle members' is 0 and 'Read/s' shows messages are still being consumed on other partitions.
+- Switch to the **Details** tab for a granular view. If you scroll down to Group member assingments table, you can see that partition 2 stopped at a particular message. The lag for that partition is accumulating rapidly.
 
 **3. Discover Root Cause (Poison Pill)**
 
-- To confirm what is blocking the pipeline, click the action menu (three dots) on the right side of the stuck group member and select **Inspect data**.
-- This opens the **Data Inspect** view with the affected topic partition and offset pre-selected.
-- You can use [kJQ](https://docs.factorhouse.io/kpow/language/kjq/manual) to filter the results.
+- To confirm what is blocking the pipeline, click the action menu (three dashes) on the left side of the stuck group member assignment and select **Inspect data**.
+- This opens the **Data Inspect** view with the affected topic partition and offset pre-selected (if the offset is not prefilled, you can fill it in yourself).
+- You can use [kJQ](https://docs.factorhouse.io/kpow/language/kjq/manual) to filter the results. (you can filter by anything, eg. offset `.offset == 332` or value)
 - Click the **Search** button. You will instantly see the malformed message value ("ONE THOUSAND DOLLARS" instead of a number) that caused the application logic to crash.
 
 ![](./images/lab2-01-inspect.png)
@@ -449,7 +455,7 @@ docker compose -f compose-remote.yml --profile consumer down
 
 **3. Restart Consumers**
 
-Kpow detects that the group has stopped and automatically applies the staged mutation. Once the mutation status shows as _Succeeded_ in the Kpow UI, restart your consumer application:
+Kpow detects that the group has stopped and automatically applies the staged mutation. Once the mutation status shows as _Success_ in the Kpow UI, restart your consumer application:
 
 ```bash
 docker compose -f compose-remote.yml --profile consumer up -d
@@ -471,7 +477,7 @@ docker compose -f compose-remote.yml --profile client down
 
 ## Lab 3: RBAC and Multi-Tenancy in Action
 
-This lab demonstrates how to safely delegate self-service capabilities across different teams without compromising security. By logging in as different user personas (Admin, Owner, Editor, and Reader), you will experience how Kpow enforces Role-Based Access Control (RBAC) and tenant isolation. You'll see these roles in action, from read-only topic inspection to staging topic creations that require admin approval.
+This lab demonstrates how to safely delegate self-service capabilities across different teams without compromising security. By logging in as different user personas (Admin, Owner, Editor, and Reader), you will experience how Kpow enforces Role-Based Access Control (RBAC) and tenant isolation. You'll see these roles in action, from read-only topic inspection to staging topic creations that require admin approval. The password for each role is `password`.
 
 ### Tenant Isolation & Resource Visibility
 
@@ -528,6 +534,13 @@ A user with the `kafka-admins` role must then review the staged mutation to eith
 Once approved, the topic is successfully created on the Kafka cluster.
 
 ![](./images/lab3-04-topic-created.png)
+
+<details>
+<summary><strong>Optional: Experimenting with RBAC values.</strong></summary>
+
+If you like, you can experiment with changing the configureations in the `hash-rbac.yml` file to see how different settings will change what a role can see. You will need to restart Kpow each time you make changes to see them take effect.
+
+</details>
 
 ---
 
