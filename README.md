@@ -63,10 +63,10 @@ You must create the Kafka cluster _before_ the Kafka Connect cluster.
 
 1. Create a new Kafka cluster and name it: `your-name-kafka`
 2. Select **Application Selection** `Apache Kafka`, **Providor selection** `Amazon Web Services`, then click Next
-2. In **Kafka Setup**, ensure you add your current IP address to the allowed list.
-2. In **Enterprise Add-Ons**, select **Schema Registry** (Once you select it, you will see which version of Karapace it is), then click Next.
-2. You'll get to a Data Centre Options page, all you have to do is click Next.
-2. Then you get to a final **Apache Kafka** page where you need to accept the terms of service and submit
+3. In **Kafka Setup**, ensure you add your current IP address to the allowed list.
+4. In **Enterprise Add-Ons**, select **Schema Registry** (Once you select it, you will see which version of Karapace it is), then click Next.
+5. You'll get to a Data Centre Options page, all you have to do is click Next.
+6. Then you get to a final **Apache Kafka** page where you need to accept the terms of service and submit
 
 **3\. Provisioning the Kafka Connect Cluster**
 
@@ -80,16 +80,16 @@ Once the JAR is uploaded and your Kafka cluster has been provisioned, create the
 
 1. Create a new Kafka Connect cluster and name it: `your-name-kafka-connect`
 2. Select **Application Selection** `Apache Kafka`, **Providor selection** `Amazon Web Services`, then click Next
-2. You'll be on the Kafka Connect Setup page. Set the **Kafka Cluster Name** to the one you just created (`your-name-kafka`). (It may take a few minutes for the new cluster to appear. If it doesn't appear, start the create new kafka connect cluster over again)
-2. Under **Kafka Connect Options**:
+3. You'll be on the Kafka Connect Setup page. Set the **Kafka Cluster Name** to the one you just created (`your-name-kafka`). (It may take a few minutes for the new cluster to appear. If it doesn't appear, start the create new kafka connect cluster over again)
+4. Under **Kafka Connect Options**:
    - Add your current IP address to the allowed list.
    - Enable **Use Custom Connectors**.
-2. You will be prompted to provide S3 bucket details for the custom connector. Enter the values you prepared above, once they are in click next:
+5. You will be prompted to provide S3 bucket details for the custom connector. Enter the values you prepared above, once they are in click next:
    - **S3 Bucket Name**: `<YOUR_S3_BUCKET_NAME>`
    - **Access Key**: `<YOUR_AWS_ACCESS_KEY>`
    - **Secret Key**: `<YOUR_AWS_SECRET_KEY>`
-2. You'll be on a Data Centre Options page, all you have to do is click Next
-2. Finally, you need to accept the terms of service again and create the cluster
+6. You'll be on a Data Centre Options page, all you have to do is click Next
+7. Finally, you need to accept the terms of service again and create the cluster
 
 </details>
 
@@ -196,16 +196,17 @@ The local Docker environment includes the following services:
 To simulate a mature enterprise environment, Kpow is configured with strict security and governance parameters connecting to the Instaclustr infrastructure. These configurations are organized as follows:
 
 ```text
-resources/
-├── kpow
-│   ├── jaas
-│   │   ├── hash-jaas.conf
-│   │   └── hash-realm.properties
-│   ├── rbac
-│   │   └── hash-rbac.yml
-│   └── schema
-│       ├── schema_jaas.conf
-│       └── schema_realm.properties
+.
+├── resources
+│   ├── kpow
+│   │   ├── jaas
+│   │   │   ├── hash-jaas.conf
+│   │   │   └── hash-realm.properties
+│   │   ├── rbac
+│   │   │   └── hash-rbac.yml
+│   │   └── schema
+│   │       ├── schema_jaas.conf
+│   │       └── schema_realm.properties
 ├── setup.remote.env
 ├── setup.remote.env.example
 └── compose-remote.yml
