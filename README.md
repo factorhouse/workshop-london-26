@@ -36,7 +36,15 @@ By the end of this workshop, you will have hands-on experience with:
 Ensure you have the following installed and configured before starting the workshop:
 
 - **Instaclustr Account**: Register for a free account at [Instaclustr](https://www.instaclustr.com/). Prior to the workshop, you will receive an email invitation to join the shared workshop account using your registered email address.
-- **Docker and Docker Compose**: This is the only local technical requirement. While the Kafka infrastructure is hosted on Instaclustr, Kpow and the Python-based lab applications will be deployed locally as Docker containers.
+- **Git, Docker and Docker Compose**: This is the only local technical requirement. While the Kafka infrastructure is hosted on Instaclustr, Kpow and the Python-based lab applications will be deployed locally as Docker containers.
+  - ```bash
+    $ git --version
+    # git version 2.43.0
+    $ docker --version
+    # Docker version 29.3.0, build 5927d80
+    $ docker compose version
+    # Docker Compose version v5.1.0
+    ```
 - **Hardware**: 8GB RAM minimum (16GB recommended).
 - **Operating System**: macOS or Linux. (Windows users are recommended to use WSL2).
 - **Internet Connection**: Required for the initial download of Docker images and connecting to the remote clusters.
@@ -304,7 +312,7 @@ WEBHOOK_URL=http://webhook-server:9000
 </details>
 <br/>
 
-Choose one of the following two paths:
+We will use the default generic webhook integration. Check the optional Slack integration if interested.
 
 #### Option A: Generic (Default)
 
@@ -312,7 +320,9 @@ No action is required. By default, Kpow routes audit logs to a local diagnostic 
 
 - **Logs visible at:** `docker compose logs -f webhook-server`
 
-#### Option B: Slack (Optional)
+<details>
+<summary><strong>Click to check Slack Integraiton</strong></summary>
+<br/>
 
 If you wish to see live audit alerts in your own Slack workspace during this lab, follow these step-by-step instructions to create a Slack app and update your configuration.
 
@@ -337,6 +347,8 @@ WEBHOOK_URL=https://hooks.slack.com/services/TXXX/BXXX/XXXX
 ```
 
 Updating these variables in your [`setup.remote.env`](./setup.remote.env) file ensures that all administrative actions (such as topic creations, configuration edits, and ACL modifications) are routed directly to your Slack channel for real-time operational transparency.
+
+</details>
 
 ### Starting the Environment and Generating Logs
 
