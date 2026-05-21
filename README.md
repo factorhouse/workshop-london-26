@@ -186,7 +186,7 @@ The workshop content is hosted on GitHub. You need to clone the repository to ac
 
 ```bash
 git clone https://github.com/factorhouse/workshop-london-26.git
-cd factorhouse-workshop-london-26
+cd workshop-london-26
 ```
 
 ### Architecture and Configuration
